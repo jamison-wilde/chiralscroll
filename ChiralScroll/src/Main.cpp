@@ -305,7 +305,8 @@ private:
 	{
 		HMENU menu = CreatePopupMenu();
 		AppendMenuW(menu,
-			MF_STRING | (settings_.GetGlobalSettings().enabled ? MF_CHECKED : MF_UNCHECKED),
+			MF_STRING | (settings_.GetGlobalSettings().enabled ? MF_CHECKED : MF_UNCHECKED) |
+				(dialogOpen_ ? MF_GRAYED : 0),
 			kMenuEnable, L"Enable");
 		AppendMenuW(menu, MF_STRING | (dialogOpen_ ? MF_GRAYED : 0), kMenuSettings, L"Settings");
 		AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
@@ -324,6 +325,10 @@ private:
 		switch(id)
 		{
 			case kMenuEnable:
+				if(dialogOpen_)
+				{
+					break;
+				}
 				settings_.GetGlobalSettings().enabled = !settings_.GetGlobalSettings().enabled;
 				chiralScroll_.SetSettings(settings_);
 				break;
