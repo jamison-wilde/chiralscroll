@@ -525,12 +525,12 @@ std::vector<TouchDevice::Contact> TouchDevice::FrameBuilder::FinishFrame()
 std::optional<HidData> HidData::FromRawInput(const HRAWINPUT handle)
 {
 	UINT size = 0;
-	if(GetRawInputData(handle, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER)) < 0) {
+	if(GetRawInputData(handle, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1)) {
 		throw ChiralScrollException("Error in GetRawInputData");
 	}
 
 	std::vector<uint8_t> raw_input_bytes(size);
-	if(GetRawInputData(handle, RID_INPUT, raw_input_bytes.data(), &size, sizeof(RAWINPUTHEADER)) < 0) {
+	if(GetRawInputData(handle, RID_INPUT, raw_input_bytes.data(), &size, sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1)) {
 		throw ChiralScrollException("Error in GetRawInputData");
 	}
 
