@@ -6,6 +6,7 @@
 
 #include <windowsx.h>
 
+#include "Log.h"
 #include "resource.h"
 #include "StringUtils.h"
 #include "TouchZoneCtrl.h"
@@ -203,6 +204,10 @@ std::optional<Settings> ShowSettingsDialog(HINSTANCE hInstance, HWND owner, cons
 	if(result == 1)
 	{
 		return state.settings();
+	}
+	if(result == -1)
+	{
+		LOG_ERROR("DialogBoxParamW failed: {}", GetLastError());
 	}
 	return std::nullopt;
 }

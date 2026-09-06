@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <windowsx.h>
 
+#include "Log.h"
+
 namespace chiralscroll
 {
 
@@ -26,7 +28,10 @@ void TouchZoneCtrl::RegisterWindowClass(HINSTANCE hInstance)
 	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
 	wc.lpszClassName = kTouchZoneCtrlClass;
-	RegisterClassW(&wc);
+	if(!RegisterClassW(&wc))
+	{
+		LOG_ERROR("TouchZoneCtrl RegisterClassW failed: {}", GetLastError());
+	}
 }
 
 TouchZoneCtrl* TouchZoneCtrl::FromHandle(HWND hwnd)

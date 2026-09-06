@@ -1,4 +1,3 @@
-#include <chrono>
 #include <exception>
 #include <filesystem>
 #include <format>
@@ -159,6 +158,8 @@ public:
 			RegisterRawInputDevices(rid, sizeof(rid)/sizeof(RAWINPUTDEVICE), sizeof(RAWINPUTDEVICE)),
 			std::format("RegisterRawInputDevices failed: {}", GetErrorMessage(GetLastError())));
 
+		taskbarCreated_ = RegisterWindowMessageW(L"TaskbarCreated");
+
 		nid_.cbSize = sizeof(nid_);
 		nid_.hWnd = hwnd_;
 		nid_.uID = 1;
@@ -230,6 +231,11 @@ private:
 
 	LRESULT HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
+		if(msg == taskbarCreated_ && taskbarCreated_ != 0 && trayAdded_)
+		{
+			Shell_NotifyIconW(NIM_ADD, &nid_);
+			return 0;
+		}
 		switch(msg)
 		{
 			case WM_INPUT:
@@ -244,6 +250,11 @@ private:
 				OnMenuCommand(LOWORD(wParam));
 				return 0;
 			case WM_DESTROY:
+				if(trayAdded_)
+				{
+					Shell_NotifyIconW(NIM_DELETE, &nid_);
+					trayAdded_ = false;
+				}
 				PostQuitMessage(0);
 				return 0;
 		}
@@ -357,6 +368,7 @@ private:
 	HWND hwnd_ = nullptr;
 	NOTIFYICONDATAW nid_{};
 	bool trayAdded_ = false;
+	UINT taskbarCreated_ = 0;
 	std::filesystem::path settingsPath_;
 	std::unordered_map<HANDLE, TouchDevice> touchDevices_;
 	Settings settings_;
