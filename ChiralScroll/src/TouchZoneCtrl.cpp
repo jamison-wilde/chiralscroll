@@ -62,6 +62,19 @@ LRESULT CALLBACK TouchZoneCtrl::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 	return ctrl->HandleMessage(msg, wParam, lParam);
 }
 
+TouchZoneCtrl::Drag TouchZoneCtrl::HitTest(POINT pt, const RECT& client) const
+{
+	if(NearPoint(pt, VGrabberPos(client), kGrabberSize/2 + kHitSlop))
+	{
+		return Drag::kVertical;
+	}
+	if(NearPoint(pt, HGrabberPos(client), kGrabberSize/2 + kHitSlop))
+	{
+		return Drag::kHorizontal;
+	}
+	return Drag::kNone;
+}
+
 LRESULT TouchZoneCtrl::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch(msg)
@@ -81,14 +94,7 @@ LRESULT TouchZoneCtrl::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 			RECT client;
 			GetClientRect(hwnd_, &client);
 			const POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-			if(NearPoint(pt, VGrabberPos(client), kGrabberSize/2 + kHitSlop))
-			{
-				drag_ = Drag::kVertical;
-			}
-			else if(NearPoint(pt, HGrabberPos(client), kGrabberSize/2 + kHitSlop))
-			{
-				drag_ = Drag::kHorizontal;
-			}
+			drag_ = HitTest(pt, client);
 			if(drag_ != Drag::kNone)
 			{
 				SetCapture(hwnd_);
@@ -134,11 +140,12 @@ LRESULT TouchZoneCtrl::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 			ScreenToClient(hwnd_, &pt);
 			RECT client;
 			GetClientRect(hwnd_, &client);
-			if(drag_ == Drag::kVertical || NearPoint(pt, VGrabberPos(client), kGrabberSize/2 + kHitSlop))
+			const Drag hit = drag_ != Drag::kNone ? drag_ : HitTest(pt, client);
+			if(hit == Drag::kVertical)
 			{
 				SetCursor(LoadCursor(nullptr, IDC_SIZEWE));
 			}
-			else if(drag_ == Drag::kHorizontal || NearPoint(pt, HGrabberPos(client), kGrabberSize/2 + kHitSlop))
+			else if(hit == Drag::kHorizontal)
 			{
 				SetCursor(LoadCursor(nullptr, IDC_SIZENS));
 			}

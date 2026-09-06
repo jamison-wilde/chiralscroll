@@ -40,6 +40,8 @@ private:
 
 	enum class Drag { kNone, kVertical, kHorizontal };
 
+	Drag HitTest(POINT pt, const RECT& client) const;
+
 	// Grabber square size matches the old wx control.
 	static constexpr int kGrabberSize = 7;
 	static constexpr int kHitSlop = 5;
