@@ -1,79 +1,210 @@
 #include "SettingsDialog.h"
 
+#include <format>
+#include <optional>
+#include <string>
+
+#include <windowsx.h>
+
+#include "resource.h"
+#include "StringUtils.h"
+#include "TouchZoneCtrl.h"
+
 namespace chiralscroll
 {
 
-SettingsDialog::SettingsDialog(
-	wxWindow* parent,
-	wxWindowID id,
-	const wxString& title,
-	const wxPoint& pos,
-	const wxSize& size,
-	long style)
-	: wxDialog(parent, id, title, pos, size, style)
+namespace
 {
-	SetSizeHints(wxDefaultSize, wxDefaultSize);
 
-	wxBoxSizer* topSizer = new wxBoxSizer(wxVERTICAL);
+std::wstring GetItemText(HWND dlg, int id)
+{
+	HWND ctrl = GetDlgItem(dlg, id);
+	const int length = GetWindowTextLengthW(ctrl);
+	std::wstring text(length, L'\0');
+	GetWindowTextW(ctrl, text.data(), length + 1);
+	return text;
+}
 
-	// Device selector row, right-aligned.
-	wxBoxSizer* deviceSizer = new wxBoxSizer(wxHORIZONTAL);
-	deviceSizer->Add(0, 0, 1, wxEXPAND, 5);
-	deviceSelectorText_ = new wxStaticText(this, wxID_ANY, "Touch Device:");
-	deviceSizer->Add(deviceSelectorText_, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
-	deviceSelector_ = new wxComboBox(
-		this, ID_DEVICE_SELECTOR, wxEmptyString, wxDefaultPosition, wxDefaultSize,
-		0, nullptr, wxCB_DROPDOWN | wxCB_READONLY | wxCB_SORT);
-	deviceSelector_->SetMinSize(wxSize(400, -1));
-	deviceSelector_->SetMaxSize(wxSize(400, -1));
-	deviceSizer->Add(deviceSelector_, 0, wxALL, 5);
-	deviceSizer->Add(5, 0, 0, 0, 0);
-	topSizer->Add(deviceSizer, 0, wxEXPAND, 5);
+std::optional<float> ParseFloat(const std::wstring& str)
+{
+	try
+	{
+		return std::stof(str);
+	}
+	catch(const std::exception&)
+	{
+		return std::nullopt;
+	}
+}
 
-	// Device settings box: controls on the left, touchpad zone control on the right.
-	wxStaticBoxSizer* settingsSizer = new wxStaticBoxSizer(
-		new wxStaticBox(this, wxID_ANY, "Device Settings"), wxHORIZONTAL);
-	wxWindow* box = settingsSizer->GetStaticBox();
+std::optional<int> ParseInt(const std::wstring& str)
+{
+	try
+	{
+		return std::stoi(str);
+	}
+	catch(const std::exception&)
+	{
+		return std::nullopt;
+	}
+}
 
-	wxBoxSizer* controlsSizer = new wxBoxSizer(wxVERTICAL);
-	enableDevice_ = new wxCheckBox(box, ID_ENABLE_DEVICE, "Enable");
-	controlsSizer->Add(enableDevice_, 0, wxALL, 5);
-	controlsSizer->Add(0, 0, 1, wxEXPAND, 5);
-	keyboardLockoutMsText_ = new wxStaticText(box, wxID_ANY, "Keyboard Lockout (ms)");
-	controlsSizer->Add(keyboardLockoutMsText_, 0, wxTOP | wxRIGHT | wxLEFT, 5);
-	keyboardLockoutMs_ = new wxTextCtrl(box, wxID_ANY);
-	controlsSizer->Add(keyboardLockoutMs_, 0, wxALL, 5);
-	controlsSizer->Add(0, 0, 1, wxEXPAND, 5);
-	verticalSensText_ = new wxStaticText(box, wxID_ANY, "Vertical Scrolling Speed");
-	controlsSizer->Add(verticalSensText_, 0, wxTOP | wxRIGHT | wxLEFT, 5);
-	verticalSens_ = new wxTextCtrl(box, ID_VERTICAL_SENS);
-	controlsSizer->Add(verticalSens_, 0, wxALL, 5);
-	controlsSizer->Add(0, 0, 1, wxEXPAND, 5);
-	horizontalSensText_ = new wxStaticText(box, wxID_ANY, "Horizontal Scrolling Speed");
-	controlsSizer->Add(horizontalSensText_, 0, wxTOP | wxRIGHT | wxLEFT, 5);
-	horizontalSens_ = new wxTextCtrl(box, ID_HORIZONTAL_SENS);
-	controlsSizer->Add(horizontalSens_, 0, wxALL, 5);
-	settingsSizer->Add(controlsSizer, 0, wxEXPAND, 5);
+class DialogState
+{
+public:
+	explicit DialogState(const Settings& settings) : settings_(settings) {}
 
-	touchpadCtrl_ = new TouchpadCtrl(box);
-	settingsSizer->Add(touchpadCtrl_, 1, wxALL | wxEXPAND, 5);
-	topSizer->Add(settingsSizer, 1, wxEXPAND, 5);
+	Settings& settings() { return settings_; }
 
-	dialogOkCancel_ = new wxStdDialogButtonSizer();
-	dialogOkCancelSave_ = new wxButton(this, wxID_SAVE);
-	dialogOkCancel_->AddButton(dialogOkCancelSave_);
-	dialogOkCancelCancel_ = new wxButton(this, wxID_CANCEL);
-	dialogOkCancel_->AddButton(dialogOkCancelCancel_);
-	dialogOkCancel_->Realize();
-	topSizer->Add(dialogOkCancel_, 0, wxALL | wxEXPAND, 5);
+	void OnInit(HWND dlg)
+	{
+		dlg_ = dlg;
+		HWND combo = GetDlgItem(dlg_, IDC_DEVICE_SELECTOR);
+		for(const auto& pair : settings_.GetDeviceSettings())
+		{
+			ComboBox_AddString(combo, StringToWstring(pair.first).c_str());
+		}
+		ComboBox_SetCurSel(combo, 0);
+		LoadDevice();
+	}
 
-	SetSizer(topSizer);
-	Layout();
-	Centre(wxBOTH);
+	void OnCommand(WPARAM wParam, LPARAM lParam)
+	{
+		const int id = LOWORD(wParam);
+		const int code = HIWORD(wParam);
+		switch(id)
+		{
+			case IDC_DEVICE_SELECTOR:
+				if(code == CBN_SELCHANGE)
+				{
+					StoreFields();
+					LoadDevice();
+				}
+				break;
+			case IDC_ENABLE_DEVICE:
+				if(code == BN_CLICKED && current_)
+				{
+					current_->enabled =
+						IsDlgButtonChecked(dlg_, IDC_ENABLE_DEVICE) == BST_CHECKED;
+					EnableControls(current_->enabled);
+				}
+				break;
+			case IDC_TOUCH_ZONES:
+				if(code == TZCN_CHANGED && current_)
+				{
+					const TouchZoneCtrl* ctrl =
+						TouchZoneCtrl::FromHandle(reinterpret_cast<HWND>(lParam));
+					current_->vScrollZone = ctrl->vZone();
+					current_->hScrollZone = ctrl->hZone();
+				}
+				break;
+			case IDOK:
+				StoreFields();
+				EndDialog(dlg_, 1);
+				break;
+			case IDCANCEL:
+				EndDialog(dlg_, 0);
+				break;
+		}
+	}
 
-	deviceSelector_->Bind(wxEVT_COMBOBOX, &SettingsDialog::OnSelectDevice, this);
-	enableDevice_->Bind(wxEVT_CHECKBOX, &SettingsDialog::OnEnable, this);
-	dialogOkCancelSave_->Bind(wxEVT_BUTTON, &SettingsDialog::OnSave, this);
+private:
+	void LoadDevice()
+	{
+		HWND combo = GetDlgItem(dlg_, IDC_DEVICE_SELECTOR);
+		const int selection = ComboBox_GetCurSel(combo);
+		if(selection < 0)
+		{
+			// No touch devices.
+			current_ = nullptr;
+			CheckDlgButton(dlg_, IDC_ENABLE_DEVICE, BST_UNCHECKED);
+			EnableWindow(GetDlgItem(dlg_, IDC_ENABLE_DEVICE), FALSE);
+			EnableControls(false);
+			return;
+		}
+		const int length = ComboBox_GetLBTextLen(combo, selection);
+		std::wstring name(length, L'\0');
+		ComboBox_GetLBText(combo, selection, name.data());
+		current_ = &settings_.GetDeviceSettings(WstringToString(name));
+
+		CheckDlgButton(dlg_, IDC_ENABLE_DEVICE,
+			current_->enabled ? BST_CHECKED : BST_UNCHECKED);
+		SetDlgItemTextW(dlg_, IDC_KEYBOARD_LOCKOUT,
+			std::to_wstring(current_->typingLockoutMs).c_str());
+		SetDlgItemTextW(dlg_, IDC_VERTICAL_SENS,
+			std::format(L"{:.2f}", current_->vSens).c_str());
+		SetDlgItemTextW(dlg_, IDC_HORIZONTAL_SENS,
+			std::format(L"{:.2f}", current_->hSens).c_str());
+		TouchZoneCtrl::FromHandle(GetDlgItem(dlg_, IDC_TOUCH_ZONES))
+			->SetZones(current_->vScrollZone, current_->hScrollZone);
+		EnableControls(current_->enabled);
+	}
+
+	// Parses the edit fields into the current device settings. A field that
+	// fails to parse keeps its previous value.
+	void StoreFields()
+	{
+		if(!current_)
+		{
+			return;
+		}
+		if(const auto value = ParseInt(GetItemText(dlg_, IDC_KEYBOARD_LOCKOUT)))
+		{
+			current_->typingLockoutMs = *value;
+		}
+		if(const auto value = ParseFloat(GetItemText(dlg_, IDC_VERTICAL_SENS)))
+		{
+			current_->vSens = *value;
+		}
+		if(const auto value = ParseFloat(GetItemText(dlg_, IDC_HORIZONTAL_SENS)))
+		{
+			current_->hSens = *value;
+		}
+	}
+
+	void EnableControls(bool enable)
+	{
+		EnableWindow(GetDlgItem(dlg_, IDC_KEYBOARD_LOCKOUT), enable);
+		EnableWindow(GetDlgItem(dlg_, IDC_VERTICAL_SENS), enable);
+		EnableWindow(GetDlgItem(dlg_, IDC_HORIZONTAL_SENS), enable);
+		EnableWindow(GetDlgItem(dlg_, IDC_TOUCH_ZONES), enable);
+	}
+
+	Settings settings_;
+	Settings::DeviceSettings* current_ = nullptr;
+	HWND dlg_ = nullptr;
+};
+
+INT_PTR CALLBACK DlgProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	if(msg == WM_INITDIALOG)
+	{
+		SetWindowLongPtr(dlg, DWLP_USER, lParam);
+		reinterpret_cast<DialogState*>(lParam)->OnInit(dlg);
+		return TRUE;
+	}
+	DialogState* state = reinterpret_cast<DialogState*>(GetWindowLongPtr(dlg, DWLP_USER));
+	if(state && msg == WM_COMMAND)
+	{
+		state->OnCommand(wParam, lParam);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+}  // namespace
+
+std::optional<Settings> ShowSettingsDialog(HINSTANCE hInstance, HWND owner, const Settings& settings)
+{
+	DialogState state(settings);
+	const INT_PTR result = DialogBoxParamW(
+		hInstance, MAKEINTRESOURCE(IDD_SETTINGS), owner, &DlgProc,
+		reinterpret_cast<LPARAM>(&state));
+	if(result == 1)
+	{
+		return state.settings();
+	}
+	return std::nullopt;
 }
 
 }  // namespace chiralscroll

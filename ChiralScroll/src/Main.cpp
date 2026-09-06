@@ -1,24 +1,17 @@
+#include <chrono>
 #include <exception>
 #include <filesystem>
 #include <format>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
-#include <wx/taskbar.h>
-#include <wx/app.h>
-#include <wx/cmdline.h>
-#include <wx/event.h>
-#include <wx/frame.h>
-#include <wx/icon.h>
-#include <wx/menu.h>
-#include <wx/msw/private.h>
-#include <wx/msw/wrapwin.h>
-#include <wx/taskbar.h>
-#include <wx/valnum.h>
-
-// Must come after wrapwin.h
+#include <Windows.h>
+#include <windowsx.h>
+#include <CommCtrl.h>
+#include <shellapi.h>
 #include <hidusage.h>
 
 #include "ChiralScroll.h"
@@ -29,440 +22,376 @@
 #include "Settings.h"
 #include "SettingsDialog.h"
 #include "StringUtils.h"
+#include "TouchZoneCtrl.h"
 #include "WinScroller.h"
-
-#define MAX_LOADSTRING 100
-
-using chiralscroll::HidData;
-using chiralscroll::TouchDevice;
-using chiralscroll::WinScroller;
-
-static constexpr char kTitle[] = "ChiralScroll";
 
 namespace chiralscroll
 {
 
-std::filesystem::path GetCurrentDirectory()
+namespace
 {
-	const DWORD size = ::GetCurrentDirectory(0, nullptr);
-	std::wstring str(size, '\0');
-	::GetCurrentDirectory(size, str.data());
+
+constexpr wchar_t kWindowClass[] = L"ChiralScrollMain";
+constexpr wchar_t kTitle[] = L"ChiralScroll";
+constexpr UINT kTrayMessage = WM_APP + 1;
+
+enum MenuId : UINT
+{
+	kMenuEnable = 1,
+	kMenuSettings,
+	kMenuClose,
+};
+
+struct CommandLineOptions
+{
+	bool logToConsole = false;
+	bool panicOnUnexpectedInput = false;
+	logging::Level logLevel = logging::Level::kWarn;
+};
+
+// Accepts -flag and --flag; --logLevel takes the next argument or =value.
+// Returns nullopt (after showing usage) on a bad command line.
+std::optional<CommandLineOptions> ParseCommandLine()
+{
+	CommandLineOptions options;
+	int argc = 0;
+	wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+	if(!argv)
+	{
+		return options;
+	}
+	bool ok = true;
+	for(int i = 1; i < argc && ok; ++i)
+	{
+		std::wstring_view arg = argv[i];
+		while(!arg.empty() && arg.front() == L'-')
+		{
+			arg.remove_prefix(1);
+		}
+		if(arg == L"logToConsole")
+		{
+			options.logToConsole = true;
+		}
+		else if(arg == L"panicOnUnexpectedInput")
+		{
+			options.panicOnUnexpectedInput = true;
+		}
+		else if(arg == L"logLevel" || arg.starts_with(L"logLevel="))
+		{
+			std::wstring_view value;
+			if(arg.starts_with(L"logLevel="))
+			{
+				value = arg.substr(std::wstring_view(L"logLevel=").size());
+			}
+			else if(i + 1 < argc)
+			{
+				value = argv[++i];
+			}
+			const std::optional<logging::Level> level = logging::ParseLevel(value);
+			if(level)
+			{
+				options.logLevel = *level;
+			}
+			else
+			{
+				ok = false;
+			}
+		}
+		else
+		{
+			ok = false;
+		}
+	}
+	LocalFree(argv);
+	if(!ok)
+	{
+		MessageBoxW(nullptr,
+			L"Usage: ChiralScroll [--logToConsole] [--panicOnUnexpectedInput]\n"
+			L"                    [--logLevel trace|debug|info|warn|err|critical|off]",
+			kTitle, MB_OK | MB_ICONERROR);
+		return std::nullopt;
+	}
+	return options;
+}
+
+std::filesystem::path GetCurrentDirectoryPath()
+{
+	const DWORD size = ::GetCurrentDirectoryW(0, nullptr);
+	std::wstring str(size, L'\0');
+	::GetCurrentDirectoryW(size, str.data());
 	str.resize(size - 1);
 	return std::filesystem::path(str);
 }
 
-class ChiralScrollFrame : public wxFrame
+class App
 {
-private:
-	class NotificationIcon : public wxTaskBarIcon
-	{
-	public:
-		NotificationIcon(ChiralScrollFrame& frame) : frame_(frame)
-		{
-			wxIcon icon;
-			THROW_IF_FALSE(icon.CreateFromHICON(LoadIcon(wxGetInstance(), MAKEINTRESOURCE(IDI_CHIRALSCROLL))),
-				"CreateFromHICON failed.");
-			SetIcon(icon, kTitle);
-		}
-
-		wxMenu* CreatePopupMenu() override
-		{
-			wxMenu* menu = new wxMenu();
-			menu->AppendCheckItem(PU_ENABLE, "Enable");
-			menu->Append(PU_SETTINGS, "Settings");
-			menu->AppendSeparator();
-			menu->Append(PU_CLOSE, "Close");
-
-			menu->Check(PU_ENABLE, frame_.settings_.GetGlobalSettings().enabled);
-
-			return menu;
-		}
-
-		void OnClick(wxTaskBarIconEvent& event)
-		{
-			PopupMenu(CreatePopupMenu());
-		}
-
-		void OnEnable(wxCommandEvent& event)
-		{
-			frame_.ToggleEnabled();
-		}
-
-		void OnSettings(wxCommandEvent& event)
-		{
-			frame_.ShowSettings();
-		}
-
-		void OnClose(wxCommandEvent& event)
-		{
-			frame_.Close();
-		}
-
-		wxDECLARE_EVENT_TABLE();
-
-	private:
-		enum
-		{
-			PU_ENABLE,
-			PU_SETTINGS,
-			PU_CLOSE,
-		};
-
-		ChiralScrollFrame& frame_;
-	};
-
-	class SettingsDialogImpl : public SettingsDialog
-	{
-	public:
-		SettingsDialogImpl(ChiralScrollFrame& frame)
-			: SettingsDialog(&frame),
-			  settings_(frame.settings_),
-			  deviceSettings_(nullptr),
-			  frame_(frame)
-		{
-			touchpadCtrl_->Bind(EVT_TOUCHPAD_VERTICAL, &SettingsDialogImpl::OnVerticalZone, this);
-			touchpadCtrl_->Bind(EVT_TOUCHPAD_HORIZONTAL, &SettingsDialogImpl::OnHorizontalZone, this);
-			for(const auto& pair : settings_.GetDeviceSettings())
-			{
-				deviceSelector_->Append(pair.first);
-			}
-			deviceSelector_->SetSelection(0);
-			SelectDevice(0);
-		}
-
-		void OnSave(wxCommandEvent& event) override
-		{
-			TransferDataFromWindow();
-			frame_.SaveSettings(settings_);
-			Close(true);
-		}
-
-		void OnSelectDevice(wxCommandEvent& event) override
-		{
-			TransferDataFromWindow();
-			SelectDevice(event.GetSelection());
-		}
-
-		void OnEnable(wxCommandEvent& event) override
-		{
-			if(deviceSettings_)
-			{
-				deviceSettings_->enabled = static_cast<bool>(event.GetInt());
-				EnableControls(deviceSettings_->enabled);
-			}
-		}
-
-		void OnVerticalZone(TouchpadEvent& event)
-		{
-			if(deviceSettings_)
-			{
-				deviceSettings_->vScrollZone = event.GetValue();
-			}
-		}
-
-		void OnHorizontalZone(TouchpadEvent& event)
-		{
-			if(deviceSettings_)
-			{
-				deviceSettings_->hScrollZone = event.GetValue();
-			}
-		}
-
-	private:
-		void SelectDevice(int selection)
-		{
-			if(selection >= 0 && static_cast<unsigned int>(selection) < deviceSelector_->GetCount())
-			{
-				deviceSettings_ = &settings_.GetDeviceSettings(
-					std::string(deviceSelector_->GetStringSelection()));
-
-				ShowDeviceSettings();
-
-				enableDevice_->Enable();
-				EnableControls(deviceSettings_->enabled);
-
-				keyboardLockoutMs_->SetValidator(wxIntegerValidator<int>(&deviceSettings_->typingLockoutMs));
-				verticalSens_->SetValidator(wxFloatingPointValidator<float>(2, &deviceSettings_->vSens));
-				horizontalSens_->SetValidator(wxFloatingPointValidator<float>(2, &deviceSettings_->hSens));
-			}
-			else
-			{
-				// Should only occur if there are no touch devices.
-				enableDevice_->SetValue(false);
-				verticalSens_->SetValue("");
-				horizontalSens_->SetValue("");
-				touchpadCtrl_->SetValue(0.5f, 0.5f);
-
-				enableDevice_->Enable(false);
-				EnableControls(false);
-			}
-		}
-
-		void ShowDeviceSettings()
-		{
-			enableDevice_->SetValue(deviceSettings_->enabled);
-			verticalSens_->SetValue(std::format("{:.2f}", deviceSettings_->vSens));
-			horizontalSens_->SetValue(std::format("{:.2f}", deviceSettings_->hSens));
-			touchpadCtrl_->SetValue(deviceSettings_->vScrollZone, deviceSettings_->hScrollZone);
-		}
-
-		void EnableControls(bool enable)
-		{
-			keyboardLockoutMs_->Enable(enable);
-			verticalSens_->Enable(enable);
-			horizontalSens_->Enable(enable);
-			touchpadCtrl_->Enable(enable);
-		}
-
-		Settings settings_;
-		Settings::DeviceSettings* deviceSettings_;
-		ChiralScrollFrame& frame_;
-	};
-
 public:
-	ChiralScrollFrame(
-		const std::string& title,
-		Settings& settings,
-		std::filesystem::path settingsPath,
-		std::unordered_map<HANDLE, TouchDevice> touchDevices,
-		ChiralScroll chiralScroll)
-		: wxFrame(nullptr, wxID_ANY, title),
-		  hWnd_(static_cast<HWND>(GetHWND())),
-		  icon_(new NotificationIcon(*this)),  // wx takes ownership
-		  settings_(settings),
-		  settingsPath_(settingsPath),
-		  touchDevices_(std::move(touchDevices)),
-		  chiralScroll_(std::move(chiralScroll)),
-		  stopped_(false)
+	App(HINSTANCE hInstance, const CommandLineOptions& options)
+		: hInstance_(hInstance),
+		  settingsPath_(GetCurrentDirectoryPath() / "settings.ini"),
+		  touchDevices_(GetTouchDevices(options.panicOnUnexpectedInput)),
+		  settings_(LoadSettings(settingsPath_, touchDevices_)),
+		  chiralScroll_(
+			settings_,
+			std::make_unique<WinScroller>(WinScroller::Direction::kVertical),
+			std::make_unique<WinScroller>(WinScroller::Direction::kHorizontal))
 	{
-		RAWINPUTDEVICE rid[]{
-			{HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_KEYBOARD, RIDEV_INPUTSINK, hWnd_},
-			{HID_USAGE_PAGE_DIGITIZER, HID_USAGE_DIGITIZER_TOUCH_PAD, RIDEV_INPUTSINK, hWnd_},
+		WNDCLASSW wc{};
+		wc.lpfnWndProc = &App::WndProc;
+		wc.hInstance = hInstance_;
+		wc.hIcon = LoadIcon(hInstance_, MAKEINTRESOURCE(IDI_CHIRALSCROLL));
+		wc.lpszClassName = kWindowClass;
+		THROW_IF_FALSE(RegisterClassW(&wc), "RegisterClass failed.");
+
+		// The window is never shown; it receives WM_INPUT and owns the tray menu.
+		hwnd_ = CreateWindowExW(
+			0, kWindowClass, kTitle, WS_OVERLAPPEDWINDOW,
+			CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+			nullptr, nullptr, hInstance_, this);
+		THROW_IF_FALSE(hwnd_ != nullptr,
+			std::format("CreateWindow failed: {}", GetErrorMessage(GetLastError())));
+
+		const RAWINPUTDEVICE rid[]{
+			{HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_KEYBOARD, RIDEV_INPUTSINK, hwnd_},
+			{HID_USAGE_PAGE_DIGITIZER, HID_USAGE_DIGITIZER_TOUCH_PAD, RIDEV_INPUTSINK, hwnd_},
 		};
-		THROW_IF_FALSE(RegisterRawInputDevices(rid, sizeof(rid)/sizeof(RAWINPUTDEVICE), sizeof(RAWINPUTDEVICE)),
+		THROW_IF_FALSE(
+			RegisterRawInputDevices(rid, sizeof(rid)/sizeof(RAWINPUTDEVICE), sizeof(RAWINPUTDEVICE)),
 			std::format("RegisterRawInputDevices failed: {}", GetErrorMessage(GetLastError())));
+
+		nid_.cbSize = sizeof(nid_);
+		nid_.hWnd = hwnd_;
+		nid_.uID = 1;
+		nid_.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+		nid_.uCallbackMessage = kTrayMessage;
+		nid_.hIcon = LoadIcon(hInstance_, MAKEINTRESOURCE(IDI_CHIRALSCROLL));
+		wcscpy_s(nid_.szTip, kTitle);
+		THROW_IF_FALSE(Shell_NotifyIconW(NIM_ADD, &nid_), "Shell_NotifyIcon failed.");
+		trayAdded_ = true;
 	}
 
-	~ChiralScrollFrame()
+	~App()
 	{
-		icon_->Destroy();
+		if(trayAdded_)
+		{
+			Shell_NotifyIconW(NIM_DELETE, &nid_);
+		}
 	}
 
-	void ToggleEnabled()
+	int Run()
 	{
-		settings_.GetGlobalSettings().enabled = !settings_.GetGlobalSettings().enabled;
-		chiralScroll_.SetSettings(settings_);
+		MSG msg{};
+		while(GetMessageW(&msg, nullptr, 0, 0) > 0)
+		{
+			TranslateMessage(&msg);
+			DispatchMessageW(&msg);
+		}
+		return static_cast<int>(msg.wParam);
 	}
 
-	void ShowSettings()
+private:
+	static Settings LoadSettings(
+		const std::filesystem::path& path,
+		const std::unordered_map<HANDLE, TouchDevice>& devices)
 	{
-		SettingsDialog* settingsDialog = new SettingsDialogImpl(*this);
-		settingsDialog->Show(true);
+		std::vector<std::string> names;
+		names.reserve(devices.size());
+		for(const auto& pair : devices)
+		{
+			names.push_back(std::string(pair.second.name()));
+		}
+		return Settings::FromFile(path, names);
 	}
 
-	void SaveSettings(Settings& settings)
+	static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
-		settings_ = settings;
-		chiralScroll_.SetSettings(settings);
-		settings_.ToFile(settingsPath_);
+		if(msg == WM_NCCREATE)
+		{
+			const CREATESTRUCT* cs = reinterpret_cast<CREATESTRUCT*>(lParam);
+			SetWindowLongPtr(hwnd, GWLP_USERDATA,
+				reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
+			return DefWindowProc(hwnd, msg, wParam, lParam);
+		}
+		App* app = reinterpret_cast<App*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+		if(!app)
+		{
+			return DefWindowProc(hwnd, msg, wParam, lParam);
+		}
+		try
+		{
+			return app->HandleMessage(hwnd, msg, wParam, lParam);
+		}
+		catch(const std::exception& e)
+		{
+			app->OnException(e);
+			return 0;
+		}
 	}
 
-	WXLRESULT MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam) override
+	LRESULT HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
-		if(!stopped_ && message == WM_INPUT)
+		switch(msg)
+		{
+			case WM_INPUT:
+				return OnRawInput(hwnd, wParam, lParam);
+			case kTrayMessage:
+				if(lParam == WM_LBUTTONUP || lParam == WM_RBUTTONUP)
+				{
+					ShowTrayMenu();
+				}
+				return 0;
+			case WM_COMMAND:
+				OnMenuCommand(LOWORD(wParam));
+				return 0;
+			case WM_DESTROY:
+				PostQuitMessage(0);
+				return 0;
+		}
+		return DefWindowProc(hwnd, msg, wParam, lParam);
+	}
+
+	LRESULT OnRawInput(HWND hwnd, WPARAM wParam, LPARAM lParam)
+	{
+		if(!stopped_)
 		{
 			auto maybeData = HidData::FromRawInput(reinterpret_cast<HRAWINPUT>(lParam));
 			if(maybeData)
 			{
-				HandleRawInput(*maybeData);
+				HandleHidInput(*maybeData);
 			}
 			else
 			{
 				// Input must have been keyboard.
 				chiralScroll_.ProcessKeyboard();
 			}
-
-			// Indicates that application was in foreground, we must call DefWindowProc
-			// to cleanup.
-			if(GET_RAWINPUT_CODE_WPARAM(wParam) == RIM_INPUT)
-			{
-				return DefWindowProc(hWnd_, message, wParam, lParam);
-			}
-			return 0;
 		}
-		return wxFrame::MSWWindowProc(message, wParam, lParam);
+		// When the application was in the foreground we must call
+		// DefWindowProc for cleanup; same when input handling has stopped.
+		if(stopped_ || GET_RAWINPUT_CODE_WPARAM(wParam) == RIM_INPUT)
+		{
+			return DefWindowProc(hwnd, WM_INPUT, wParam, lParam);
+		}
+		return 0;
 	}
 
-	void Stop()
+	void HandleHidInput(HidData& hidData)
 	{
-		stopped_ = true;
-	}
-
-private:
-	void HandleRawInput(HidData& hidData)
-	{
-		if(!touchDevices_.contains(hidData.header.hDevice))
+		const auto it = touchDevices_.find(hidData.header.hDevice);
+		if(it == touchDevices_.end())
 		{
 			return;
 		}
-
-		auto& touchDevice = touchDevices_.at(hidData.header.hDevice);
-		const std::optional<std::vector<TouchDevice::Contact>> contacts = touchDevice.GetContacts(hidData);
+		const std::optional<std::vector<TouchDevice::Contact>> contacts =
+			it->second.GetContacts(hidData);
 		if(!contacts)
 		{
 			return;
 		}
-		chiralScroll_.ProcessTouch(touchDevice, *contacts);
+		chiralScroll_.ProcessTouch(it->second, *contacts);
 	}
 
-	const HWND hWnd_;
-	NotificationIcon* const icon_;
-	Settings& settings_;
-	std::filesystem::path settingsPath_;
-	std::unordered_map<HANDLE, TouchDevice> touchDevices_;
-	ChiralScroll chiralScroll_;
-	bool stopped_;
-};
-
-wxBEGIN_EVENT_TABLE(ChiralScrollFrame::NotificationIcon, wxTaskBarIcon)
-	EVT_TASKBAR_LEFT_UP(ChiralScrollFrame::NotificationIcon::OnClick)
-	EVT_MENU(PU_ENABLE, ChiralScrollFrame::NotificationIcon::OnEnable)
-	EVT_MENU(PU_SETTINGS, ChiralScrollFrame::NotificationIcon::OnSettings)
-	EVT_MENU(PU_CLOSE, ChiralScrollFrame::NotificationIcon::OnClose)
-wxEND_EVENT_TABLE()
-
-
-class ChiralScrollApp : public wxApp
-{
-public:
-	virtual ~ChiralScrollApp()
+	void ShowTrayMenu()
 	{
-		if(logToConsole_)
-		{
-			FreeConsole();
-		}
+		HMENU menu = CreatePopupMenu();
+		AppendMenuW(menu,
+			MF_STRING | (settings_.GetGlobalSettings().enabled ? MF_CHECKED : MF_UNCHECKED),
+			kMenuEnable, L"Enable");
+		AppendMenuW(menu, MF_STRING, kMenuSettings, L"Settings");
+		AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+		AppendMenuW(menu, MF_STRING, kMenuClose, L"Close");
+		POINT pt;
+		GetCursorPos(&pt);
+		// Required so the menu dismisses when clicking elsewhere.
+		SetForegroundWindow(hwnd_);
+		TrackPopupMenu(menu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd_, nullptr);
+		PostMessage(hwnd_, WM_NULL, 0, 0);
+		DestroyMenu(menu);
 	}
 
-	void OnInitCmdLine(wxCmdLineParser& parser) override
+	void OnMenuCommand(UINT id)
 	{
-		wxApp::OnInitCmdLine(parser);
-
-		const wxCmdLineEntryDesc desc[] = {
-			{wxCMD_LINE_SWITCH, "", "logToConsole", "Log to console."},
-			{wxCMD_LINE_OPTION, "", "logLevel", "Logging level: trace, debug, info, warn, err, critical, or off (default warn).", wxCMD_LINE_VAL_STRING},
-			{wxCMD_LINE_SWITCH, "", "panicOnUnexpectedInput", "Panic and crash when unexpected inputs are received."},
-			{wxCMD_LINE_NONE},
-		};
-		parser.SetDesc(desc);
-	}
-
-	bool OnCmdLineParsed(wxCmdLineParser& parser) override
-	{
-		if(!wxApp::OnCmdLineParsed(parser))
+		switch(id)
 		{
-			return false;
-		}
-
-		if(parser.Found("logToConsole"))
-		{
-			logToConsole_= true;
-		}
-
-		if(parser.Found("panicOnUnexpectedInput"))
-		{
-			panicOnUnexpectedInput_ = true;
-		}
-
-		wxString level = "warn";
-		parser.Found("logLevel", &level);
-		const std::optional<logging::Level> parsed =
-			logging::ParseLevel(std::wstring_view(level.wc_str(), level.length()));
-		if(!parsed)
-		{
-			return false;
-		}
-		logging::SetLevel(*parsed);
-
-		return true;
-	}
-
-	bool OnInit() override
-	{
-		if(!wxApp::OnInit())
-		{
-			return false;
-		}
-
-		if(logToConsole_)
-		{
-			logging::InitConsole();
-		}
-		else
-		{
-			logging::InitFile(GetCurrentDirectory() / "chiralscroll.log");
-		}
-
-		std::unordered_map<HANDLE, TouchDevice> devices = chiralscroll::GetTouchDevices(panicOnUnexpectedInput_);
-		std::vector<std::string> deviceNames;
-		deviceNames.reserve(devices.size());
-		for(const auto& pair : devices)
-		{
-			deviceNames.push_back(std::string(pair.second.name()));
-		}
-
-		std::filesystem::path settingsPath = GetCurrentDirectory() / "settings.ini";
-		settings_ = Settings::FromFile(settingsPath, deviceNames);
-
-		// wx takes ownership.
-		chiralScrollFrame_ = new ChiralScrollFrame(
-			kTitle,
-			settings_,
-			std::move(settingsPath),
-			std::move(devices),
-			ChiralScroll(
-				settings_,
-				std::make_unique<WinScroller>(WinScroller::Direction::kVertical),
-				std::make_unique<WinScroller>(WinScroller::Direction::kHorizontal)));
-		return true;
-	}
-
-	bool OnExceptionInMainLoop() override
-	{
-		// Let OnUnhandledException handle this.
-		throw;
-	}
-
-	void OnUnhandledException() override
-	{
-		try
-		{
-			throw;
-		}
-		catch(const std::exception& e)
-		{
-			chiralScrollFrame_->Stop();
-			OnException(e);
+			case kMenuEnable:
+				settings_.GetGlobalSettings().enabled = !settings_.GetGlobalSettings().enabled;
+				chiralScroll_.SetSettings(settings_);
+				break;
+			case kMenuSettings:
+			{
+				const std::optional<Settings> result =
+					ShowSettingsDialog(hInstance_, hwnd_, settings_);
+				if(result)
+				{
+					settings_ = *result;
+					chiralScroll_.SetSettings(settings_);
+					settings_.ToFile(settingsPath_);
+				}
+				break;
+			}
+			case kMenuClose:
+				DestroyWindow(hwnd_);
+				break;
 		}
 	}
 
-private:
 	void OnException(const std::exception& e)
 	{
-		std::string message = std::format("Caught exception: {}", e.what());
+		stopped_ = true;
+		const std::string message = std::format("Caught exception: {}", e.what());
 		LOG_ERROR("{}", message);
-		MessageBox(
-			nullptr,
-			StringToWstring(message).c_str(),
-			L"ChiralScroll Error",
-			MB_OK | MB_ICONERROR);
+		MessageBoxW(nullptr, StringToWstring(message).c_str(),
+			L"ChiralScroll Error", MB_OK | MB_ICONERROR);
 	}
 
+	const HINSTANCE hInstance_;
+	HWND hwnd_ = nullptr;
+	NOTIFYICONDATAW nid_{};
+	bool trayAdded_ = false;
+	std::filesystem::path settingsPath_;
+	std::unordered_map<HANDLE, TouchDevice> touchDevices_;
 	Settings settings_;
-	ChiralScrollFrame* chiralScrollFrame_;
-	bool logToConsole_ = false;
-	bool panicOnUnexpectedInput_ = false;
+	ChiralScroll chiralScroll_;
+	bool stopped_ = false;
 };
 
-wxIMPLEMENT_APP(ChiralScrollApp);
+}  // namespace
 
 }  // namespace chiralscroll
+
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int)
+{
+	using namespace chiralscroll;
+
+	const std::optional<CommandLineOptions> options = ParseCommandLine();
+	if(!options)
+	{
+		return 1;
+	}
+	if(options->logToConsole)
+	{
+		logging::InitConsole();
+	}
+	else
+	{
+		logging::InitFile(GetCurrentDirectoryPath() / "chiralscroll.log");
+	}
+	logging::SetLevel(options->logLevel);
+
+	INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_STANDARD_CLASSES};
+	InitCommonControlsEx(&icc);
+	TouchZoneCtrl::RegisterWindowClass(hInstance);
+
+	try
+	{
+		App app(hInstance, *options);
+		return app.Run();
+	}
+	catch(const std::exception& e)
+	{
+		const std::string message = std::format("Caught exception: {}", e.what());
+		LOG_ERROR("{}", message);
+		MessageBoxW(nullptr, StringToWstring(message).c_str(),
+			L"ChiralScroll Error", MB_OK | MB_ICONERROR);
+		return 1;
+	}
+}

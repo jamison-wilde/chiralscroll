@@ -90,7 +90,11 @@
       <AdditionalDependencies>Rpcrt4.lib;comctl32.lib;hid.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>
       </AdditionalLibraryDirectories>
+      <AdditionalManifestDependencies>type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'</AdditionalManifestDependencies>
     </Link>
+    <Manifest>
+      <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
+    </Manifest>
     <CustomBuildStep />
     <PreBuildEvent>
       <Command>
@@ -125,7 +129,11 @@
       <AdditionalDependencies>Rpcrt4.lib;comctl32.lib;hid.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>
       </AdditionalLibraryDirectories>
+      <AdditionalManifestDependencies>type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'</AdditionalManifestDependencies>
     </Link>
+    <Manifest>
+      <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
+    </Manifest>
     <CustomBuildStep />
     <PreBuildEvent>
       <Command>
@@ -147,7 +155,6 @@
     <ClCompile Include="src\Settings.cpp" />
     <ClCompile Include="src\SettingsDialog.cpp" />
     <ClCompile Include="src\StringUtils.cpp" />
-    <ClCompile Include="src\TouchpadCtrl.cpp" />
     <ClCompile Include="src\TouchSession.cpp" />
     <ClCompile Include="src\TouchZoneCtrl.cpp" />
     <ClCompile Include="src\WinScroller.cpp" />
@@ -162,7 +169,6 @@
     <ClInclude Include="src\Settings.h" />
     <ClInclude Include="src\SettingsDialog.h" />
     <ClInclude Include="src\StringUtils.h" />
-    <ClInclude Include="src\TouchpadCtrl.h" />
     <ClInclude Include="src\TouchSession.h" />
     <ClInclude Include="src\TouchZoneCtrl.h" />
     <ClInclude Include="src\Vector.h" />
