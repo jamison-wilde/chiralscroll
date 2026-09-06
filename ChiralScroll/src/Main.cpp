@@ -132,8 +132,10 @@ public:
 		  settings_(LoadSettings(settingsPath_, touchDevices_)),
 		  chiralScroll_(
 			settings_,
-			std::make_unique<WinScroller>(WinScroller::Direction::kVertical),
-			std::make_unique<WinScroller>(WinScroller::Direction::kHorizontal))
+			std::make_unique<WinScroller>(
+				WinScroller::Direction::kVertical, settings_.GetGlobalSettings().scrollFlushMs),
+			std::make_unique<WinScroller>(
+				WinScroller::Direction::kHorizontal, settings_.GetGlobalSettings().scrollFlushMs))
 	{
 		WNDCLASSW wc{};
 		wc.lpfnWndProc = &App::WndProc;

@@ -29,6 +29,12 @@ public:
 		float reverseDeadzoneAngle;
 		// A scaling factor applied to sensitivity to make the vSens and hSens settings more convenient.
 		float sensScalingFactor;
+		// Accumulated counter-rotation (radians) before circle scrolling
+		// flips direction.
+		float reverseRotationRad;
+		// Minimum interval between synthesized scroll events; pending deltas
+		// accumulate between flushes. 0 sends every event immediately.
+		int scrollFlushMs;
 	};
 
 	struct DeviceSettings

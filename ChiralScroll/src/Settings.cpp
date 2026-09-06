@@ -29,6 +29,8 @@ static constexpr struct
 	float reverseDeadzone = 20.0f/1784;
 	float reverseDeadzoneAngle = 3.14159f/1.0f;
 	float sensScalingFactor = 0.1f;
+	float reverseRotationRad = 0.9f;
+	int scrollFlushMs = 15;
 
 	// Device settings.
 	int typingLockoutMs = 500;
@@ -171,6 +173,8 @@ Settings Settings::FromFile(const std::filesystem::path& path, const std::vector
 		globalSection.READ_SETTING(reverseDeadzone),
 		globalSection.READ_SETTING(reverseDeadzoneAngle),
 		globalSection.READ_SETTING(sensScalingFactor),
+		globalSection.READ_SETTING(reverseRotationRad),
+		globalSection.READ_SETTING(scrollFlushMs),
 	};
 
 	for(const auto& device : devices)
