@@ -42,6 +42,9 @@ private:
 
 	Drag HitTest(POINT pt, const RECT& client) const;
 
+	// Scales a design-time (96 DPI) metric to the control's current DPI.
+	int Scaled(int value) const;
+
 	// Grabber square size matches the old wx control.
 	static constexpr int kGrabberSize = 7;
 	static constexpr int kHitSlop = 5;

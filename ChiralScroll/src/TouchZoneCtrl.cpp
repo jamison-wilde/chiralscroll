@@ -67,13 +67,18 @@ LRESULT CALLBACK TouchZoneCtrl::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
 	return ctrl->HandleMessage(msg, wParam, lParam);
 }
 
+int TouchZoneCtrl::Scaled(int value) const
+{
+	return MulDiv(value, static_cast<int>(GetDpiForWindow(hwnd_)), 96);
+}
+
 TouchZoneCtrl::Drag TouchZoneCtrl::HitTest(POINT pt, const RECT& client) const
 {
-	if(NearPoint(pt, VGrabberPos(client), kGrabberSize/2 + kHitSlop))
+	if(NearPoint(pt, VGrabberPos(client), Scaled(kGrabberSize)/2 + Scaled(kHitSlop)))
 	{
 		return Drag::kVertical;
 	}
-	if(NearPoint(pt, HGrabberPos(client), kGrabberSize/2 + kHitSlop))
+	if(NearPoint(pt, HGrabberPos(client), Scaled(kGrabberSize)/2 + Scaled(kHitSlop)))
 	{
 		return Drag::kHorizontal;
 	}
@@ -172,7 +177,7 @@ void TouchZoneCtrl::Paint(HDC dc, const RECT& client) const
 	const int width = client.right - client.left;
 	const int height = client.bottom - client.top;
 
-	HRGN clipRgn = CreateRoundRectRgn(0, 0, width + 1, height + 1, kCornerSize, kCornerSize);
+	HRGN clipRgn = CreateRoundRectRgn(0, 0, width + 1, height + 1, Scaled(kCornerSize), Scaled(kCornerSize));
 	SelectClipRgn(dc, clipRgn);
 
 	HBRUSH padBrush = CreateSolidBrush(RGB(128, 128, 128));
@@ -215,8 +220,9 @@ void TouchZoneCtrl::Paint(HDC dc, const RECT& client) const
 		HBRUSH black = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
 		const POINT v = VGrabberPos(client);
 		const POINT h = HGrabberPos(client);
-		RECT vg{v.x - kGrabberSize/2, v.y - kGrabberSize/2, v.x + kGrabberSize/2 + 1, v.y + kGrabberSize/2 + 1};
-		RECT hg{h.x - kGrabberSize/2, h.y - kGrabberSize/2, h.x + kGrabberSize/2 + 1, h.y + kGrabberSize/2 + 1};
+		const int grabberSize = Scaled(kGrabberSize);
+		RECT vg{v.x - grabberSize/2, v.y - grabberSize/2, v.x + grabberSize/2 + 1, v.y + grabberSize/2 + 1};
+		RECT hg{h.x - grabberSize/2, h.y - grabberSize/2, h.x + grabberSize/2 + 1, h.y + grabberSize/2 + 1};
 		FillRect(dc, &vg, black);
 		FillRect(dc, &hg, black);
 	}
