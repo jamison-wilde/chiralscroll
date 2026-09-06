@@ -149,6 +149,7 @@
     <ClCompile Include="src\StringUtils.cpp" />
     <ClCompile Include="src\TouchpadCtrl.cpp" />
     <ClCompile Include="src\TouchSession.cpp" />
+    <ClCompile Include="src\TouchZoneCtrl.cpp" />
     <ClCompile Include="src\WinScroller.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -163,6 +164,7 @@
     <ClInclude Include="src\StringUtils.h" />
     <ClInclude Include="src\TouchpadCtrl.h" />
     <ClInclude Include="src\TouchSession.h" />
+    <ClInclude Include="src\TouchZoneCtrl.h" />
     <ClInclude Include="src\Vector.h" />
     <ClInclude Include="src\WinScroller.h" />
   </ItemGroup>
