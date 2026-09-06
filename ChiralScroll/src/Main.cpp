@@ -7,9 +7,6 @@
 #include <absl/container/flat_hash_map.h>
 #include <absl/strings/str_cat.h>
 #include <absl/strings/str_format.h>
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/basic_file_sink.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
 #include <wx/taskbar.h>
 #include <wx/app.h>
 #include <wx/cmdline.h>
@@ -28,6 +25,7 @@
 #include "ChiralScroll.h"
 #include "ChiralScrollException.h"
 #include "HidUtils.h"
+#include "Log.h"
 #include "resource.h"
 #include "Settings.h"
 #include "SettingsDialog.h"
@@ -376,24 +374,15 @@ public:
 			panicOnUnexpectedInput_ = true;
 		}
 
-		static const absl::flat_hash_map<wxString, spdlog::level::level_enum> levelMap = {
-			{"trace", spdlog::level::trace},
-			{"debug", spdlog::level::debug},
-			{"info", spdlog::level::info},
-			{"warn", spdlog::level::warn},
-			{"err", spdlog::level::err},
-			{"critical", spdlog::level::critical},
-			{"off", spdlog::level::off},
-		};
 		wxString level = "warn";
-		if(parser.Found("logLevel", &level))
+		parser.Found("logLevel", &level);
+		const std::optional<logging::Level> parsed =
+			logging::ParseLevel(std::wstring_view(level.wc_str(), level.length()));
+		if(!parsed)
 		{
-			if(!levelMap.contains(level))
-			{
-				return false;
-			}
+			return false;
 		}
-		spdlog::set_level(levelMap.at(level));
+		logging::SetLevel(*parsed);
 
 		return true;
 	}
@@ -407,13 +396,11 @@ public:
 
 		if(logToConsole_)
 		{
-			AllocConsole();
-			spdlog::set_default_logger(spdlog::stderr_color_mt("stderr_logger"));
+			logging::InitConsole();
 		}
 		else
 		{
-			spdlog::set_default_logger(
-				spdlog::basic_logger_st("basic_logger", (GetCurrentDirectory() / "chiralscroll.log").string(), true));
+			logging::InitFile(GetCurrentDirectory() / "chiralscroll.log");
 		}
 
 		absl::flat_hash_map<HANDLE, TouchDevice> devices = chiralscroll::GetTouchDevices(panicOnUnexpectedInput_);
@@ -463,7 +450,7 @@ private:
 	void OnException(const std::exception& e)
 	{
 		std::string message = absl::StrCat("Caught exception: ", e.what());
-		SPDLOG_ERROR(message);
+		LOG_ERROR("{}", message);
 		MessageBox(
 			nullptr,
 			StringToWstring(message).c_str(),

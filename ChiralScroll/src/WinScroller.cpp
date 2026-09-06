@@ -2,9 +2,8 @@
 
 #include <Windows.h>
 
-#include <spdlog/spdlog.h>
-
 #include "ChiralScrollException.h"
+#include "Log.h"
 
 namespace chiralscroll
 {
@@ -15,7 +14,7 @@ void WinScroller::StartScrolling()
 	GetCursorPos(&p);
 	RECT r = {p.x, p.y, p.x + 1, p.y + 1};
 	ClipCursor(&r);
-	SPDLOG_INFO("Start scrolling session.");
+	LOG_INFO("Start scrolling session.");
 }
 
 void WinScroller::Scroll(int amt)
@@ -32,14 +31,14 @@ void WinScroller::Scroll(int amt)
 
 	THROW_IF_FALSE(SendInput(1, &input, sizeof(INPUT)),
 		GetErrorMessage(GetLastError()));
-	SPDLOG_DEBUG("Scroll by {} {}.",
+	LOG_DEBUG("Scroll by {} {}.",
 		amt, dir_ == Direction::kVertical ? "vertical" : "horizontal");
 }
 
 void WinScroller::StopScrolling()
 {
 	ClipCursor(nullptr);
-	SPDLOG_INFO("Stop scrolling session.");
+	LOG_INFO("Stop scrolling session.");
 }
 
 }  // namespace chiralscroll

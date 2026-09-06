@@ -4,8 +4,8 @@
 
 #include <absl/strings/string_view.h>
 #include <absl/strings/substitute.h>
-#include <spdlog/spdlog.h>
 
+#include "Log.h"
 #include "StringUtils.h"
 
 namespace chiralscroll
@@ -77,7 +77,7 @@ std::vector<TouchDevice::ContactInfo> GetContactInfos(const HidDevice& hidDevice
 		const std::optional<TouchDevice::ContactInfo::Area> physicalArea = maybe.physicalArea.toContactArea();
 		if(logicalArea && physicalArea)
 		{
-			SPDLOG_INFO("ContactInfo link={}, top={}, bottom={}, left={}, right={}",
+			LOG_INFO("ContactInfo link={}, top={}, bottom={}, left={}, right={}",
 			            link, logicalArea->top, logicalArea->bottom, logicalArea->left, logicalArea->right);
 			contacts.push_back({link, *logicalArea, *physicalArea});
 		}
@@ -408,7 +408,7 @@ std::optional<std::vector<TouchDevice::Contact>> TouchDevice::GetContacts(const 
 			return std::nullopt;
 		}
 		frameBuilder_.Start(contactCount);
-		SPDLOG_DEBUG("Expecting {} contacts.", contactCount);
+		LOG_DEBUG("Expecting {} contacts.", contactCount);
 	}
 	const auto contacts = GetContactsInReport(hidData);
 	return frameBuilder_.AddReport(contacts);
@@ -453,12 +453,12 @@ std::vector<TouchDevice::Contact> TouchDevice::GetContactsInReport(const HidData
 			contacts.push_back({*contactId, contactInfo.link, isTouch, confidence, logicalX, logicalY, physicalX, physicalY});
 		}
 	}
-	SPDLOG_DEBUG("Report:");
-	SPDLOG_TRACE("  button1={}, button2={}, button3={}",
+	LOG_DEBUG("Report:");
+	LOG_TRACE("  button1={}, button2={}, button3={}",
 		GetButton(hidData, {0x09, 0x01}), GetButton(hidData, {0x09, 0x02}), GetButton(hidData, {0x09, 0x03}));
 	for(const auto& contact : contacts)
 	{
-		SPDLOG_DEBUG("  id={}, link={}, isTouch={}, confidence={}, x={}, y={}",
+		LOG_DEBUG("  id={}, link={}, isTouch={}, confidence={}, x={}, y={}",
 			contact.id, contact.contactInfoLink, contact.isTouch, contact.confidence, contact.logicalX, contact.logicalY);
 	}
 	return contacts;
@@ -513,7 +513,7 @@ std::vector<TouchDevice::Contact> TouchDevice::FrameBuilder::FinishFrame()
 		}
 		else
 		{
-			SPDLOG_WARN(msg);
+			LOG_WARN("{}", msg);
 		}
 	}
 	expectedContactCount_ = 0;

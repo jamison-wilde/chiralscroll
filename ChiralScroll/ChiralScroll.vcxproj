@@ -142,6 +142,7 @@
     <ClCompile Include="src\ChiralScroll.cpp" />
     <ClCompile Include="src\ChiralScrollException.cpp" />
     <ClCompile Include="src\HidUtils.cpp" />
+    <ClCompile Include="src\Log.cpp" />
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\Settings.cpp" />
     <ClCompile Include="src\SettingsDialog.cpp" />
@@ -155,6 +156,7 @@
     <ClInclude Include="src\ChiralScroll.h" />
     <ClInclude Include="src\ChiralScrollException.h" />
     <ClInclude Include="src\HidUtils.h" />
+    <ClInclude Include="src\Log.h" />
     <ClInclude Include="src\Scroller.h" />
     <ClInclude Include="src\Settings.h" />
     <ClInclude Include="src\SettingsDialog.h" />
