@@ -67,6 +67,11 @@ private:
 	// will not affect sensitivity.
 	Vector<float> ScaleVector(Vector<LONG> vector) const;
 
+	// Detects sustained counter-rotation (chirality change) and flips the
+	// scroll direction. Returns true if it flipped.
+	bool UpdateRotation(Vector<float> newDir);
+	void ResetRotation();
+
 	ULONG contactId_;
 	TouchDevice::ContactInfo contactInfo_;
 	Vector<float> direction_;
@@ -75,6 +80,11 @@ private:
 	float sens_;
 	Settings::GlobalSettings settings_;
 	Scroller& scroller_;
+
+	// Rotation sense established for this stroke: +1 CCW, -1 CW, 0 unknown.
+	float rotationSense_ = 0.0f;
+	float senseAccum_ = 0.0f;
+	float counterRotation_ = 0.0f;
 };
 
 }  // namespace chiralscroll

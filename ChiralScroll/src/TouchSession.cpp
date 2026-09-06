@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "Log.h"
+
 namespace chiralscroll
 {
 
@@ -14,6 +16,9 @@ namespace
 		double x = acos(a*b/(a.Norm()*b.Norm()));
 		return x;
 	}
+
+	// Radians of consistent rotation before a stroke's sense is established.
+	constexpr float kSenseEstablishRad = 0.6f;
 
 }  // namespace
 
@@ -108,6 +113,7 @@ void ScrollSession::ContinueScrolling(const TouchDevice::Contact& contact)
 		if(newDir.Norm() > settings_.reverseDeadzone)
 		{
 			scrollDirection_ *= -1.0f;
+			ResetRotation();
 			Scroll(newDir, newPos);
 		}
 	}
@@ -117,8 +123,55 @@ void ScrollSession::ContinueScrolling(const TouchDevice::Contact& contact)
 	// any other direction.
 	else if(newDir.Norm() > settings_.reverseDeadzone || newDir*direction_ > settings_.moveDeadzone)
 	{
+		if(UpdateRotation(newDir/static_cast<float>(newDir.Norm())))
+		{
+			LOG_DEBUG("Chirality flip: scrollDirection={}", scrollDirection_);
+		}
 		Scroll(newDir, newPos);
 	}
+}
+
+bool ScrollSession::UpdateRotation(Vector<float> newDir)
+{
+	// Signed angle from the previous movement direction to the new one:
+	// positive is CCW in touchpad coordinates.
+	const float cross = direction_.x()*newDir.y() - direction_.y()*newDir.x();
+	const float dot = direction_*newDir;
+	const float angle = atan2f(cross, dot);
+
+	if(rotationSense_ == 0.0f)
+	{
+		senseAccum_ += angle;
+		if(fabsf(senseAccum_) > kSenseEstablishRad)
+		{
+			rotationSense_ = senseAccum_ > 0.0f ? 1.0f : -1.0f;
+			counterRotation_ = 0.0f;
+		}
+		return false;
+	}
+	if(angle*rotationSense_ < 0.0f)
+	{
+		counterRotation_ += fabsf(angle);
+		if(counterRotation_ > settings_.reverseRotationRad)
+		{
+			scrollDirection_ *= -1.0f;
+			rotationSense_ = -rotationSense_;
+			senseAccum_ = 0.0f;
+			counterRotation_ = 0.0f;
+			return true;
+		}
+		return false;
+	}
+	// Rotation agrees with the established sense; decay accumulated noise.
+	counterRotation_ = std::max(0.0f, counterRotation_ - fabsf(angle)*0.5f);
+	return false;
+}
+
+void ScrollSession::ResetRotation()
+{
+	rotationSense_ = 0.0f;
+	senseAccum_ = 0.0f;
+	counterRotation_ = 0.0f;
 }
 
 void ScrollSession::Scroll(Vector<float> newDir, Vector<float> newPos)
