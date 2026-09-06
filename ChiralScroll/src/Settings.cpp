@@ -4,10 +4,9 @@
 #include <algorithm>
 #include <charconv>
 #include <exception>
+#include <format>
 #include <string_view>
 #include <Windows.h>
-
-#include <absl/strings/substitute.h>
 
 #include "ChiralScrollException.h"
 #include "StringUtils.h"
@@ -117,10 +116,8 @@ public:
 		{
 			throw ChiralScrollException(
 				e,
-				absl::Substitute(
-					"Error parsing $0. Could not parse: $2",
-					WstringToString(key),
-					WstringToString(str)));
+				std::format("Error parsing {}. Could not parse: {}",
+					WstringToString(key), WstringToString(str)));
 		}
 	}
 
@@ -133,7 +130,7 @@ public:
 				key.c_str(),
 				ToWstring(value).c_str(),
 				path_.c_str()),
-			absl::StrCat("WritePrivateProfileString: ", GetErrorMessage(GetLastError())));
+			std::format("WritePrivateProfileString: {}", GetErrorMessage(GetLastError())));
 		return *this;
 	}
 
@@ -217,28 +214,26 @@ Settings::GlobalSettings& Settings::GetGlobalSettings()
 	return globalSettings_;
 }
 
-absl::flat_hash_map<std::string, Settings::DeviceSettings>& Settings::GetDeviceSettings()
+std::unordered_map<std::string, Settings::DeviceSettings>& Settings::GetDeviceSettings()
 {
 	return deviceSettings_;
 }
 
 Settings::DeviceSettings& Settings::GetDeviceSettings(std::string_view deviceName)
 {
-	absl::string_view abslName = ToAbslView(deviceName);
-	if(deviceSettings_.contains(std::string(deviceName)))
+	auto [it, inserted] = deviceSettings_.try_emplace(std::string(deviceName));
+	if(inserted)
 	{
-		return deviceSettings_.at(abslName);
+		it->second = {
+			kDefaultSettings.enabled,
+			kDefaultSettings.typingLockoutMs,
+			kDefaultSettings.vScrollZone,
+			kDefaultSettings.hScrollZone,
+			kDefaultSettings.vSens,
+			kDefaultSettings.hSens,
+		};
 	}
-	DeviceSettings& settings = deviceSettings_[abslName];
-	settings = {
-		kDefaultSettings.enabled,
-		kDefaultSettings.typingLockoutMs,
-		kDefaultSettings.vScrollZone,
-		kDefaultSettings.hScrollZone,
-		kDefaultSettings.vSens,
-		kDefaultSettings.hSens,
-	};
-	return settings;
+	return it->second;
 }
 
 }  // namespace chiralscroll

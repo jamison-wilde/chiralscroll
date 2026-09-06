@@ -54,7 +54,8 @@ bool ChiralScroll::ShouldStartScrollingSession(const Settings::DeviceSettings& d
 	return contacts.size() == 1 &&
 		contacts[0].id == 0 &&
 		contacts[0].isTouch &&
-		absl::ToInt64Milliseconds(absl::Now() - lastKeyboardTime_) > deviceSettings.typingLockoutMs;
+		std::chrono::steady_clock::now() - lastKeyboardTime_ >
+			std::chrono::milliseconds(deviceSettings.typingLockoutMs);
 }
 
 void ChiralScroll::StartScrollingSession(const TouchDevice& device, const std::vector<TouchDevice::Contact>& contacts)
@@ -97,7 +98,7 @@ void ChiralScroll::StartScrollingSession(const TouchDevice& device, const std::v
 
 void ChiralScroll::ProcessKeyboard()
 {
-	lastKeyboardTime_ = absl::Now();
+	lastKeyboardTime_ = std::chrono::steady_clock::now();
 	// Cancel any ongoing touch session.
 	if(touchSession_)
 	{

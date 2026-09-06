@@ -1,9 +1,8 @@
 #include "HidUtils.h"
 
+#include <format>
 #include <functional>
-
-#include <absl/strings/string_view.h>
-#include <absl/strings/substitute.h>
+#include <unordered_map>
 
 #include "Log.h"
 #include "StringUtils.h"
@@ -46,7 +45,7 @@ struct MaybeContact
 
 std::vector<TouchDevice::ContactInfo> GetContactInfos(const HidDevice& hidDevice)
 {
-	absl::flat_hash_map<USHORT, MaybeContact> maybeContacts;
+	std::unordered_map<USHORT, MaybeContact> maybeContacts;
 	for(const HIDP_VALUE_CAPS& cap : hidDevice.FindValueCaps({HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_Y}))
 	{
 		if(cap.IsAbsolute)
@@ -117,7 +116,7 @@ HIDP_CAPS GetCaps(const RawInputDevice& device)
 {
 	HIDP_CAPS caps;
 	THROW_IF_NTERROR(HidP_GetCaps(device.preparsedData(), &caps),
-	                 absl::StrCat("In HidP_GetCaps for device ", ToAbslView(device.name())));
+	                 std::format("In HidP_GetCaps for device {}", device.name()));
 	return caps;
 }
 
@@ -130,7 +129,7 @@ std::vector<HIDP_VALUE_CAPS> GetValueCaps(const HIDP_CAPS& caps, const RawInputD
 	}
 	std::vector<HIDP_VALUE_CAPS> valueCaps(numValueCaps);
 	THROW_IF_NTERROR(HidP_GetValueCaps(HidP_Input, valueCaps.data(), &numValueCaps, device.preparsedData()),
-	                 absl::StrCat("In HidP_GetValueCaps for device ", ToAbslView(device.name())));
+	                 std::format("In HidP_GetValueCaps for device {}", device.name()));
 	valueCaps.resize(numValueCaps);
 	return valueCaps;
 }
@@ -144,7 +143,7 @@ std::vector<HIDP_BUTTON_CAPS> GetButtonCaps(const HIDP_CAPS& caps, const RawInpu
 	}
 	std::vector<HIDP_BUTTON_CAPS> buttonCaps(numButtonCaps);
 	THROW_IF_NTERROR(HidP_GetButtonCaps(HidP_Input, buttonCaps.data(), &numButtonCaps, device.preparsedData()),
-	                 absl::StrCat("In HidP_GetButtonCaps for device ", ToAbslView(device.name())));
+	                 std::format("In HidP_GetButtonCaps for device {}", device.name()));
 	buttonCaps.resize(numButtonCaps);
 	return buttonCaps;
 }
@@ -233,13 +232,13 @@ ULONG HidDevice::GetLogicalValue(const HidData& hidData, Usage usage, std::optio
 		if(!link)
 		{
 			throw ChiralScrollException(
-				absl::Substitute("No link for usage ($0, $1, $2) found for device $3.",
-					usage.page, usage.id, HidP_Input, ToAbslView(name())));
+				std::format("No link for usage ({}, {}, {}) found for device {}.",
+					usage.page, usage.id, static_cast<int>(HidP_Input), name()));
 		}
 	}
 	ULONG value;
 	THROW_IF_NTERROR(GetLogicalValue(hidData, usage, *link, &value),
-		absl::StrCat("In HidP_GetUsageValue for device ", ToAbslView(name())));
+		std::format("In HidP_GetUsageValue for device {}", name()));
 	return value;
 }
 
@@ -263,7 +262,7 @@ std::optional<ULONG> HidDevice::GetLogicalValueOrNullopt(const HidData& hidData,
 			return std::nullopt;
 		default:
 			throw ChiralScrollException::FromNtstatus(
-				status, absl::StrCat("In HidP_GetUsageValue for device ", ToAbslView(name())));
+				status, std::format("In HidP_GetUsageValue for device {}", name()));
 	}
 }
 
@@ -288,13 +287,13 @@ LONG HidDevice::GetPhysicalValue(const HidData& hidData, Usage usage, std::optio
 		if(!link)
 		{
 			throw ChiralScrollException(
-				absl::Substitute("No link for usage ($0, $1, $2) found for device $3.",
-					usage.page, usage.id, HidP_Input, ToAbslView(name())));
+				std::format("No link for usage ({}, {}, {}) found for device {}.",
+					usage.page, usage.id, static_cast<int>(HidP_Input), name()));
 		}
 	}
 	LONG value;
 	THROW_IF_NTERROR(GetPhysicalValue(hidData, usage, *link, &value),
-		absl::StrCat("In HidP_GetScaledUsageValue for device ", ToAbslView(name())));
+		std::format("In HidP_GetScaledUsageValue for device {}", name()));
 	return value;
 }
 
@@ -318,7 +317,7 @@ std::optional<LONG> HidDevice::GetPhysicalValueOrNullopt(const HidData& hidData,
 			return std::nullopt;
 		default:
 			throw ChiralScrollException::FromNtstatus(
-				status, absl::StrCat("In HidP_GetScaledUsafeValue for device ", ToAbslView(name())));
+				status, std::format("In HidP_GetScaledUsafeValue for device {}", name()));
 	}
 }
 
@@ -355,7 +354,7 @@ bool HidDevice::GetButton(const HidData& hidData, Usage usage, std::optional<USH
 	}
 	std::vector<USAGE> usages;
 	THROW_IF_NTERROR(GetUsages(hidData, usage, *link, &usages),
-		absl::StrCat("In HidP_GetUsages for device ", ToAbslView(name())));
+		std::format("In HidP_GetUsages for device {}", name()));
 	return std::find(usages.begin(), usages.end(), usage.id) != usages.end();
 }
 
@@ -505,8 +504,8 @@ std::vector<TouchDevice::Contact> TouchDevice::FrameBuilder::FinishFrame()
 	if(contacts_.size() != expectedContactCount_)
 	{
 		const std::string msg =
-			absl::Substitute("Wrong number of contacts in frame. Expected $0, got $1.",
-			                 expectedContactCount_, contacts_.size());
+			std::format("Wrong number of contacts in frame. Expected {}, got {}.",
+			            expectedContactCount_, contacts_.size());
 		if(panicOnUnexpectedInput_)
 		{
 			throw ChiralScrollException(msg);
@@ -544,10 +543,10 @@ std::optional<HidData> HidData::FromRawInput(const HRAWINPUT handle)
 }
 
 
-absl::flat_hash_map<HANDLE, TouchDevice> GetTouchDevices(bool panicOnUnexpectedInput)
+std::unordered_map<HANDLE, TouchDevice> GetTouchDevices(bool panicOnUnexpectedInput)
 {
 	std::vector<RAWINPUTDEVICELIST> ridList = chiralscroll::GetRidList();
-	absl::flat_hash_map<HANDLE, TouchDevice> touchDevices;
+	std::unordered_map<HANDLE, TouchDevice> touchDevices;
 
 	for(const auto& rid : ridList)
 	{

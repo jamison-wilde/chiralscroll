@@ -1,12 +1,10 @@
 #pragma once
 
 #include <exception>
+#include <format>
 #include <string>
 #include <string_view>
 #include <Windows.h>
-
-#include <absl/strings/string_view.h>
-#include <absl/strings/substitute.h>
 
 namespace chiralscroll
 {
@@ -19,17 +17,17 @@ class ChiralScrollException : public std::exception
 {
 public:
 	ChiralScrollException(std::string_view what) : what_(what) {}
-	ChiralScrollException(const std::exception& e, absl::string_view what)
-		: what_(absl::Substitute("$0\nCaused by: $1", what, e.what())) {}
+	ChiralScrollException(const std::exception& e, std::string_view what)
+		: what_(std::format("{}\nCaused by: {}", what, e.what())) {}
 
-	static ChiralScrollException FromNtstatus(NTSTATUS status, absl::string_view what)
+	static ChiralScrollException FromNtstatus(NTSTATUS status, std::string_view what)
 	{
-		return ChiralScrollException(absl::Substitute("$0: $1", NtstatusToString(status), what));
+		return ChiralScrollException(std::format("{}: {}", NtstatusToString(status), what));
 	}
 
-	static ChiralScrollException FromHresult(HRESULT result, absl::string_view what)
+	static ChiralScrollException FromHresult(HRESULT result, std::string_view what)
 	{
-		return ChiralScrollException(absl::Substitute("$0: $1", HresultToString(result), what));
+		return ChiralScrollException(std::format("{}: {}", HresultToString(result), what));
 	}
 
 	const char* what() const override

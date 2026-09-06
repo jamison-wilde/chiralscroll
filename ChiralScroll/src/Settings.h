@@ -2,9 +2,8 @@
 
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 #include <vector>
-
-#include <absl/container/flat_hash_map.h>
 
 namespace chiralscroll
 {
@@ -58,13 +57,13 @@ public:
 	void ToFile(const std::filesystem::path& path) const;
 
 	GlobalSettings& GetGlobalSettings();
-	absl::flat_hash_map<std::string, DeviceSettings>& GetDeviceSettings(); 
+	std::unordered_map<std::string, DeviceSettings>& GetDeviceSettings();
 	DeviceSettings& GetDeviceSettings(std::string_view deviceName);
 
 private:
 	GlobalSettings globalSettings_;
 	// Per-device settings.
-	absl::flat_hash_map<std::string, DeviceSettings> deviceSettings_;
+	std::unordered_map<std::string, DeviceSettings> deviceSettings_;
 };
 
 }  // namespace chiralscroll

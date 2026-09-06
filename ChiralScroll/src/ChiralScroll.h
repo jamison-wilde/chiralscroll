@@ -1,10 +1,9 @@
 #pragma once
 
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <Windows.h>
-
-#include <absl/time/time.h>
 
 #include "HidUtils.h"
 #include "Scroller.h"
@@ -27,7 +26,7 @@ public:
 		  hScroller_(std::move(hScroller)),
 		  touchSession_(nullptr),
 		  currentDevice_(nullptr),
-		  lastKeyboardTime_(absl::InfinitePast()) {}
+		  lastKeyboardTime_() {}
 
 	void SetSettings(const Settings& settings);
 	void ProcessTouch(const TouchDevice& device, const std::vector<TouchDevice::Contact>& contacts);
@@ -44,7 +43,7 @@ private:
 	std::unique_ptr<Scroller> hScroller_;
 	std::unique_ptr<TouchSession> touchSession_;
 	TouchDevice* currentDevice_;
-	absl::Time lastKeyboardTime_;
+	std::chrono::steady_clock::time_point lastKeyboardTime_;
 };
 
 }  // namespace chiralscroll

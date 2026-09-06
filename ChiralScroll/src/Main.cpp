@@ -1,12 +1,11 @@
 #include <exception>
 #include <filesystem>
+#include <format>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
-#include <absl/container/flat_hash_map.h>
-#include <absl/strings/str_cat.h>
-#include <absl/strings/str_format.h>
 #include <wx/taskbar.h>
 #include <wx/app.h>
 #include <wx/cmdline.h>
@@ -202,8 +201,8 @@ private:
 		void ShowDeviceSettings()
 		{
 			enableDevice_->SetValue(deviceSettings_->enabled);
-			verticalSens_->SetValue(absl::StrFormat("%.2f", deviceSettings_->vSens));
-			horizontalSens_->SetValue(absl::StrFormat("%.2f", deviceSettings_->hSens));
+			verticalSens_->SetValue(std::format("{:.2f}", deviceSettings_->vSens));
+			horizontalSens_->SetValue(std::format("{:.2f}", deviceSettings_->hSens));
 			touchpadCtrl_->SetValue(deviceSettings_->vScrollZone, deviceSettings_->hScrollZone);
 		}
 
@@ -225,7 +224,7 @@ public:
 		const std::string& title,
 		Settings& settings,
 		std::filesystem::path settingsPath,
-		absl::flat_hash_map<HANDLE, TouchDevice> touchDevices,
+		std::unordered_map<HANDLE, TouchDevice> touchDevices,
 		ChiralScroll chiralScroll)
 		: wxFrame(nullptr, wxID_ANY, title),
 		  hWnd_(static_cast<HWND>(GetHWND())),
@@ -241,7 +240,7 @@ public:
 			{HID_USAGE_PAGE_DIGITIZER, HID_USAGE_DIGITIZER_TOUCH_PAD, RIDEV_INPUTSINK, hWnd_},
 		};
 		THROW_IF_FALSE(RegisterRawInputDevices(rid, sizeof(rid)/sizeof(RAWINPUTDEVICE), sizeof(RAWINPUTDEVICE)),
-			absl::StrCat("RegisterRawInputDevices failed: ", GetErrorMessage(GetLastError())));
+			std::format("RegisterRawInputDevices failed: {}", GetErrorMessage(GetLastError())));
 	}
 
 	~ChiralScrollFrame()
@@ -320,7 +319,7 @@ private:
 	NotificationIcon* const icon_;
 	Settings& settings_;
 	std::filesystem::path settingsPath_;
-	absl::flat_hash_map<HANDLE, TouchDevice> touchDevices_;
+	std::unordered_map<HANDLE, TouchDevice> touchDevices_;
 	ChiralScroll chiralScroll_;
 	bool stopped_;
 };
@@ -403,7 +402,7 @@ public:
 			logging::InitFile(GetCurrentDirectory() / "chiralscroll.log");
 		}
 
-		absl::flat_hash_map<HANDLE, TouchDevice> devices = chiralscroll::GetTouchDevices(panicOnUnexpectedInput_);
+		std::unordered_map<HANDLE, TouchDevice> devices = chiralscroll::GetTouchDevices(panicOnUnexpectedInput_);
 		std::vector<std::string> deviceNames;
 		deviceNames.reserve(devices.size());
 		for(const auto& pair : devices)
@@ -449,7 +448,7 @@ public:
 private:
 	void OnException(const std::exception& e)
 	{
-		std::string message = absl::StrCat("Caught exception: ", e.what());
+		std::string message = std::format("Caught exception: {}", e.what());
 		LOG_ERROR("{}", message);
 		MessageBox(
 			nullptr,

@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include <Windows.h>
@@ -11,9 +12,6 @@
 // Must come after Windows.h
 #include <Hidclass.h>
 #include <hidsdi.h>
-
-#include <absl/container/flat_hash_map.h>
-#include <absl/container/flat_hash_set.h>
 
 #include "ChiralScrollException.h"
 
@@ -192,6 +190,6 @@ private:
 		rawData(raw_input.data.hid.bRawData, raw_input.data.hid.bRawData + static_cast<ptrdiff_t>(hid.dwSizeHid) * hid.dwCount) {}
 };
 
-absl::flat_hash_map<HANDLE, TouchDevice> GetTouchDevices(bool panicOnUnexpectedInput);
+std::unordered_map<HANDLE, TouchDevice> GetTouchDevices(bool panicOnUnexpectedInput);
 
 }  // namespace chiralscroll
