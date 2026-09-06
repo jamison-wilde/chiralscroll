@@ -33,6 +33,9 @@ private:
 	static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	LRESULT HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam);
 
+	// Handles WM_PAINT: double-buffers Paint() into a memory DC so the whole
+	// client area (corners included) is covered in one BitBlt, avoiding flicker.
+	void OnPaint() const;
 	void Paint(HDC dc, const RECT& client) const;
 	POINT VGrabberPos(const RECT& client) const;
 	POINT HGrabberPos(const RECT& client) const;

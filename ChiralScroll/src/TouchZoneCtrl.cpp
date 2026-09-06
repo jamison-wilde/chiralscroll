@@ -43,7 +43,7 @@ void TouchZoneCtrl::SetZones(float vZone, float hZone)
 {
 	vZone_ = std::clamp(vZone, 0.0f, 1.0f);
 	hZone_ = std::clamp(hZone, 0.0f, 1.0f);
-	InvalidateRect(hwnd_, nullptr, TRUE);
+	InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 LRESULT CALLBACK TouchZoneCtrl::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -90,15 +90,8 @@ LRESULT TouchZoneCtrl::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 	switch(msg)
 	{
 		case WM_PAINT:
-		{
-			PAINTSTRUCT ps;
-			HDC dc = BeginPaint(hwnd_, &ps);
-			RECT client;
-			GetClientRect(hwnd_, &client);
-			Paint(dc, client);
-			EndPaint(hwnd_, &ps);
+			OnPaint();
 			return 0;
-		}
 		case WM_LBUTTONDOWN:
 		{
 			RECT client;
@@ -129,7 +122,7 @@ LRESULT TouchZoneCtrl::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 			{
 				hZone_ = std::clamp(1.0f - static_cast<float>(GET_Y_LPARAM(lParam))/height, 0.0f, 1.0f);
 			}
-			InvalidateRect(hwnd_, nullptr, TRUE);
+			InvalidateRect(hwnd_, nullptr, FALSE);
 			NotifyParent();
 			return 0;
 		}
@@ -170,6 +163,24 @@ LRESULT TouchZoneCtrl::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 			return 0;
 	}
 	return DefWindowProc(hwnd_, msg, wParam, lParam);
+}
+
+void TouchZoneCtrl::OnPaint() const
+{
+	PAINTSTRUCT ps;
+	HDC dc = BeginPaint(hwnd_, &ps);
+	RECT client;
+	GetClientRect(hwnd_, &client);
+	HDC memDc = CreateCompatibleDC(dc);
+	HBITMAP bitmap = CreateCompatibleBitmap(dc, client.right, client.bottom);
+	HGDIOBJ oldBitmap = SelectObject(memDc, bitmap);
+	FillRect(memDc, &client, GetSysColorBrush(COLOR_BTNFACE));
+	Paint(memDc, client);
+	BitBlt(dc, 0, 0, client.right, client.bottom, memDc, 0, 0, SRCCOPY);
+	SelectObject(memDc, oldBitmap);
+	DeleteObject(bitmap);
+	DeleteDC(memDc);
+	EndPaint(hwnd_, &ps);
 }
 
 void TouchZoneCtrl::Paint(HDC dc, const RECT& client) const
