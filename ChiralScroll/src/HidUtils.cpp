@@ -453,8 +453,11 @@ std::vector<TouchDevice::Contact> TouchDevice::GetContactsInReport(const HidData
 		}
 	}
 	LOG_DEBUG("Report:");
-	LOG_TRACE("  button1={}, button2={}, button3={}",
-		GetButton(hidData, {0x09, 0x01}), GetButton(hidData, {0x09, 0x02}), GetButton(hidData, {0x09, 0x03}));
+	if(logging::GetLevel() <= logging::Level::kTrace)
+	{
+		LOG_TRACE("  button1={}, button2={}, button3={}",
+			GetButton(hidData, {0x09, 0x01}), GetButton(hidData, {0x09, 0x02}), GetButton(hidData, {0x09, 0x03}));
+	}
 	for(const auto& contact : contacts)
 	{
 		LOG_DEBUG("  id={}, link={}, isTouch={}, confidence={}, x={}, y={}",
