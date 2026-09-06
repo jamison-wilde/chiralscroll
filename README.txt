@@ -19,16 +19,11 @@ The settings window lists all touchpad devices connected to the system. Should y
 
 Building:
 
-Build using Visual Studio 2022 (Debug|x64).
+Build with Visual Studio 2022 (Debug|x64 or Release|x64). No external
+dependencies: the app is pure Win32 + the C++20 standard library.
 
-C++ dependencies (abseil, spdlog, wxwidgets; triplet x64-windows-static) are installed automatically by vcpkg in manifest mode. This requires a git clone of vcpkg with user-wide MSBuild integration:
+    msbuild ChiralScroll.sln -p:Configuration=Debug -p:Platform=x64
 
-    git clone https://github.com/microsoft/vcpkg C:\vcpkg
-    C:\vcpkg\bootstrap-vcpkg.bat
-    C:\vcpkg\vcpkg integrate install
-
-The first build compiles wxWidgets from source and takes a while.
-
-The settings dialog (src/SettingsDialog.cpp/.h) is hand-written and checked in; wxFormBuilder is no longer required to build. The original design document is kept at formbuilder/ChiralScroll.fbp for reference.
-
-The released version is based on the Debug build, and this is the version I recommend building. The Release build seems to have an issue where SendInput is occasionally very slow, causing scrolling to freeze. (The Release configuration also still targets the v142 toolset.)
+The released version is based on the Debug build, and this is the version I
+recommend building. The Release build seems to have an issue where SendInput
+is occasionally very slow, causing scrolling to freeze.
