@@ -16,6 +16,8 @@ Right click the tray icon and select settings. You can change the scroll speed f
 
 The settings window lists all touchpad devices connected to the system. Should you have more than one, you can set them independently. The dvice names may not be obvous, so you may need to experiment to determine which device has which name.
 
+Advanced tuning keys in settings.ini's [Global Settings] section: scrollFlushMs (scroll event batching interval, 0 = off) and reverseRotationRad (how much counter-circling flips the scroll direction).
+
 
 Building:
 
