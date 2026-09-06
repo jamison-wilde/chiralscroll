@@ -296,9 +296,9 @@ private:
 		AppendMenuW(menu,
 			MF_STRING | (settings_.GetGlobalSettings().enabled ? MF_CHECKED : MF_UNCHECKED),
 			kMenuEnable, L"Enable");
-		AppendMenuW(menu, MF_STRING, kMenuSettings, L"Settings");
+		AppendMenuW(menu, MF_STRING | (dialogOpen_ ? MF_GRAYED : 0), kMenuSettings, L"Settings");
 		AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-		AppendMenuW(menu, MF_STRING, kMenuClose, L"Close");
+		AppendMenuW(menu, MF_STRING | (dialogOpen_ ? MF_GRAYED : 0), kMenuClose, L"Close");
 		POINT pt;
 		GetCursorPos(&pt);
 		// Required so the menu dismisses when clicking elsewhere.
@@ -318,8 +318,14 @@ private:
 				break;
 			case kMenuSettings:
 			{
+				if(dialogOpen_)
+				{
+					break;
+				}
+				dialogOpen_ = true;
 				const std::optional<Settings> result =
 					ShowSettingsDialog(hInstance_, hwnd_, settings_);
+				dialogOpen_ = false;
 				if(result)
 				{
 					settings_ = *result;
@@ -329,6 +335,10 @@ private:
 				break;
 			}
 			case kMenuClose:
+				if(dialogOpen_)
+				{
+					break;
+				}
 				DestroyWindow(hwnd_);
 				break;
 		}
@@ -352,6 +362,7 @@ private:
 	Settings settings_;
 	ChiralScroll chiralScroll_;
 	bool stopped_ = false;
+	bool dialogOpen_ = false;
 };
 
 }  // namespace
