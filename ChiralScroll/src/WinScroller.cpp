@@ -47,10 +47,17 @@ void WinScroller::Flush()
 	input.mi.time = 0;  //Windows will do the timestamp
 	input.mi.dwExtraInfo = GetMessageExtraInfo();
 
-	THROW_IF_FALSE(SendInput(1, &input, sizeof(INPUT)),
-		GetErrorMessage(GetLastError()));
-	LOG_DEBUG("Scroll by {} {}.",
-		pending_, dir_ == Direction::kVertical ? "vertical" : "horizontal");
+	if(!SendInput(1, &input, sizeof(INPUT)))
+	{
+		// Flush runs from destructors; never throw. Injection can fail
+		// transiently (e.g. secure desktop), so log and drop the batch.
+		LOG_ERROR("SendInput failed: {}", GetErrorMessage(GetLastError()));
+	}
+	else
+	{
+		LOG_DEBUG("Scroll by {} {}.",
+			pending_, dir_ == Direction::kVertical ? "vertical" : "horizontal");
+	}
 	pending_ = 0;
 }
 
