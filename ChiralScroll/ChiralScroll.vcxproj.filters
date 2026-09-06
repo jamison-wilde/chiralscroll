@@ -13,9 +13,6 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="wxFormBuilder Files">
-      <UniqueIdentifier>{f5ff8db2-8652-4028-9d40-f45f4cf51df9}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="resources\ChiralScroll.rc">
@@ -102,10 +99,5 @@
     <ClInclude Include="src\TouchZoneCtrl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="formbuilder\ChiralScroll.fbp">
-      <Filter>wxFormBuilder Files</Filter>
-    </None>
   </ItemGroup>
 </Project>

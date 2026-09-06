@@ -1,7 +1,0 @@
-syntax: glob
-.vs
-x64
-*.user
-*.aps
-gen
-vcpkg_installed
