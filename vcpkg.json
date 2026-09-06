@@ -1,0 +1,13 @@
+{
+	"$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+	"name": "chiralscroll",
+	"version": "1.0.0",
+	"description": "Chiral scroll implementation for Windows 10.",
+	"builtin-baseline": "04a9d8e5212d01ee1dd9478eadd9caade4f8b0d4",
+	"dependencies": [
+		"abseil",
+		"spdlog",
+		"wxwidgets"
+	],
+	"supports": "windows"
+}

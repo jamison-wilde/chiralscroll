@@ -1,0 +1,9 @@
+.superpowers/
+.vs/
+x64/
+tmp/
+vcpkg_installed/
+*.user
+*.aps
+chiralscroll.log
+settings.ini
