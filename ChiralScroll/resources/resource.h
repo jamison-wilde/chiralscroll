@@ -6,6 +6,19 @@
 #define IDC_CHIRALSCROLL                109
 #define IDI_CHIRALSCROLL                138
 
+#define IDD_SETTINGS                    140
+
+#define IDC_DEVICE_SELECTOR             1001
+#define IDC_ENABLE_DEVICE               1002
+#define IDC_KEYBOARD_LOCKOUT            1003
+#define IDC_VERTICAL_SENS               1004
+#define IDC_HORIZONTAL_SENS             1005
+#define IDC_TOUCH_ZONES                 1006
+
+#ifndef IDC_STATIC
+#define IDC_STATIC -1
+#endif
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
