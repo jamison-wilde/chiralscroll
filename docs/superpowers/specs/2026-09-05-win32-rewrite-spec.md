@@ -41,6 +41,12 @@ Preserved user-visible behavior:
 - Log line format may differ cosmetically; levels and destinations identical.
 - Fix latent bug: `Settings.cpp` `absl::Substitute("Error parsing $0 ... $2", key, str)`
   references `$2` with only 2 args — becomes a correct 2-arg format.
+- The app is now DPI-aware (PerMonitorV2) and uses comctl32 v6 visual styles;
+  the wx build shipped DPI-unaware with classic-themed controls. TouchZoneCtrl's
+  grabber/corner metrics are unscaled pixels (visually smaller at high DPI —
+  backlogged).
+- A failed log-file open now degrades to no logging instead of a startup
+  error box (spdlog threw; the minimal logger stays silent).
 
 ## Replacements
 
