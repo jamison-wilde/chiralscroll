@@ -43,6 +43,12 @@ jobs:
       - name: Install WiX
         run: dotnet tool install --global wix --version 7.0.0
 
+      # WiX v7 gates every invocation behind the Open Source Maintenance Fee
+      # EULA (error WIX7015). Accepting it here records acceptance for the
+      # rest of the job, matching how it is accepted on the dev machine.
+      - name: Accept WiX EULA
+        run: wix eula accept wix7
+
       - name: Add WiX extensions
         run: |
           wix extension add -g WixToolset.Util.wixext/7.0.0
