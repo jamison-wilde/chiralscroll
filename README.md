@@ -80,5 +80,5 @@ logged.
 
 ## License
 
-MIT — see `LICENSE.txt`. Original work Copyright (c) 2021 Derek Brown;
-modifications Copyright (c) 2026 Jamison Wilde.
+MIT — see [`LICENSE`](LICENSE). Original work Copyright (c) 2021 Derek Brown;
+Win32 rewrite and modifications Copyright (c) 2026 Jamison Wilde.

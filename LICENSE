@@ -1,6 +1,8 @@
 MIT License
 
-Copyright (c) 2021 Derek Brown
+Copyright (c) 2021 Derek Brown (original ChiralScroll,
+https://sourceforge.net/projects/chiralscroll/)
+Copyright (c) 2026 Jamison Wilde (Win32 rewrite and subsequent modifications)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
