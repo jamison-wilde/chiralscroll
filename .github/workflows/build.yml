@@ -39,13 +39,14 @@ jobs:
       - name: Build Debug
         run: msbuild ChiralScroll.sln -p:Configuration=Debug -p:Platform=x64 -m -v:m
 
+      # Pinned to the versions the installer was authored and verified against.
       - name: Install WiX
-        run: dotnet tool install --global wix --version 6.0.1
+        run: dotnet tool install --global wix --version 7.0.0
 
       - name: Add WiX extensions
         run: |
-          wix extension add -g WixToolset.Util.wixext
-          wix extension add -g WixToolset.UI.wixext
+          wix extension add -g WixToolset.Util.wixext/7.0.0
+          wix extension add -g WixToolset.UI.wixext/7.0.0
 
       - name: Build MSI
         run: |
