@@ -1,0 +1,79 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      # Version comes from the tag (v1.2.3 -> 1.2.3); untagged builds use the
+      # fallback so the MSI always has a valid numeric version.
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref }}"
+          if ($tag -match '^refs/tags/v(\d+\.\d+\.\d+)$') { $version = $Matches[1] }
+          else { $version = '1.1.0' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
+
+      - name: Build Release
+        run: msbuild ChiralScroll.sln -p:Configuration=Release -p:Platform=x64 -m -v:m
+
+      - name: Build Debug
+        run: msbuild ChiralScroll.sln -p:Configuration=Debug -p:Platform=x64 -m -v:m
+
+      - name: Install WiX
+        run: dotnet tool install --global wix --version 6.0.1
+
+      - name: Add WiX extensions
+        run: |
+          wix extension add -g WixToolset.Util.wixext
+          wix extension add -g WixToolset.UI.wixext
+
+      - name: Build MSI
+        run: |
+          mkdir dist
+          wix build -arch x64 -d Version=${{ steps.version.outputs.version }} -d BinDir=ChiralScroll\x64\Release wix\main.wxs -o dist\ChiralScroll-${{ steps.version.outputs.version }}-x64.msi -ext WixToolset.Util.wixext -ext WixToolset.UI.wixext
+
+      - name: Stage portable exes
+        shell: pwsh
+        run: |
+          Copy-Item ChiralScroll\x64\Release\ChiralScroll.exe dist\ChiralScroll-${{ steps.version.outputs.version }}-x64.exe
+          Compress-Archive -Path ChiralScroll\x64\Release\ChiralScroll.exe, README.md, LICENSE -DestinationPath dist\ChiralScroll-${{ steps.version.outputs.version }}-x64-portable.zip
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: chiralscroll-${{ steps.version.outputs.version }}
+          path: |
+            dist/*.msi
+            dist/*.exe
+            dist/*.zip
+          if-no-files-found: error
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.msi
+            dist/*.exe
+            dist/*.zip
+          generate_release_notes: true

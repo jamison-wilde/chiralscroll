@@ -1,0 +1,145 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!--
+  ChiralScroll MSI installer (per-user, no elevation).
+  Build with: wix build -arch x64 -d Version=1.1.0 -d BinDir=ChiralScroll\x64\Release \
+               wix\main.wxs -o dist\ChiralScroll-1.1.0-x64.msi \
+               -ext WixToolset.Util.wixext -ext WixToolset.UI.wixext
+
+  Per-user install matters here: ChiralScroll writes settings.ini and
+  chiralscroll.log next to its exe, so INSTALLDIR must stay user-writable.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+    <Package
+        Name="ChiralScroll"
+        Version="$(Version)"
+        Manufacturer="ChiralScroll"
+        UpgradeCode="7B4E5C21-9A6D-4F83-BE12-3C7D5A8F4E60"
+        Language="1033"
+        Compressed="yes"
+        Scope="perUser"
+        InstallerVersion="500">
+
+        <SummaryInformation Description="ChiralScroll — chiral edge scrolling for Windows Precision touchpads" />
+
+        <MajorUpgrade
+            Schedule="afterInstallInitialize"
+            DowngradeErrorMessage="A newer version of [ProductName] is already installed. Setup will now exit." />
+
+        <MediaTemplate EmbedCab="yes" />
+
+        <!-- Force file replacement even when version numbers match, so
+             rebuilds of the same version actually land. -->
+        <Property Id="REINSTALLMODE" Value="amus" />
+
+        <!-- The tray app holds a raw-input registration and the log file;
+             close it before replacing files. -->
+        <util:CloseApplication Id="CloseChiralScroll"
+                               Target="ChiralScroll.exe"
+                               CloseMessage="yes"
+                               TerminateProcess="500"
+                               RebootPrompt="no" />
+
+        <Feature Id="Main" Title="ChiralScroll" Level="1">
+            <ComponentRef Id="ChiralScrollExe" />
+            <ComponentRef Id="RunKey" />
+            <ComponentRef Id="UninstallEntry" />
+            <ComponentRef Id="StartMenuShortcut" />
+        </Feature>
+
+        <ui:WixUI Id="WixUI_Minimal" />
+        <WixVariable Id="WixUILicenseRtf" Value="wix\license.rtf" />
+
+        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Start ChiralScroll now" />
+        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+
+        <!-- ShellExecute rather than a deferred ExeCommand: the tray app
+             should not inherit msiexec's startup state. -->
+        <Property Id="WixShellExecTarget" Value="[#ChiralScrollExeFile]" />
+
+        <CustomAction Id="LaunchApplication"
+                      BinaryRef="Wix4UtilCA_X64"
+                      DllEntry="WixShellExec"
+                      Impersonate="yes"
+                      Execute="immediate"
+                      Return="check" />
+
+        <UI>
+            <Publish Dialog="ExitDialog"
+                     Control="Finish"
+                     Event="DoAction"
+                     Value="LaunchApplication"
+                     Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+        </UI>
+
+        <StandardDirectory Id="LocalAppDataFolder">
+            <Directory Id="ProgramsFolder" Name="Programs">
+                <Directory Id="INSTALLDIR" Name="ChiralScroll" />
+            </Directory>
+        </StandardDirectory>
+
+        <StandardDirectory Id="ProgramMenuFolder" />
+
+        <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder" Guid="*" Bitness="always64">
+            <Shortcut Id="ChiralScrollShortcut"
+                      Name="ChiralScroll"
+                      Description="Chiral edge scrolling for Precision touchpads"
+                      Target="[INSTALLDIR]ChiralScroll.exe"
+                      WorkingDirectory="INSTALLDIR" />
+            <RegistryValue
+                Root="HKCU"
+                Key="Software\ChiralScroll"
+                Name="ShortcutInstalled"
+                Type="integer"
+                Value="1"
+                KeyPath="yes" />
+        </Component>
+
+        <Component Id="ChiralScrollExe" Directory="INSTALLDIR" Guid="*" Bitness="always64">
+            <File Id="ChiralScrollExeFile"
+                  Source="$(BinDir)\ChiralScroll.exe"
+                  KeyPath="yes" />
+            <!-- settings.ini and chiralscroll.log are created beside the exe
+                 at runtime; remove them on uninstall so no folder is left. -->
+            <RemoveFile Id="RemoveSettingsIni" Name="settings.ini" On="uninstall" />
+            <RemoveFile Id="RemoveLog" Name="chiralscroll.log" On="uninstall" />
+        </Component>
+
+        <!-- Autostart at login. WorkingDirectory is not settable from a Run
+             key, but the app resolves settings.ini/log against the current
+             directory, which for a Run-key launch is inherited — so the exe
+             is launched via its full path and the app's own CWD handling
+             applies. See docs/BACKLOG.md if this ever needs hardening. -->
+        <Component Id="RunKey" Directory="INSTALLDIR" Guid="*" Bitness="always64">
+            <RegistryValue
+                Root="HKCU"
+                Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                Name="ChiralScroll"
+                Type="string"
+                Value="&quot;[INSTALLDIR]ChiralScroll.exe&quot;"
+                KeyPath="yes" />
+        </Component>
+
+        <Component Id="UninstallEntry" Directory="INSTALLDIR" Guid="*" Bitness="always64">
+            <RegistryKey Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\ChiralScroll">
+                <RegistryValue Name="DisplayName" Type="string" Value="ChiralScroll" />
+                <RegistryValue Name="DisplayVersion" Type="string" Value="$(Version)" />
+                <RegistryValue Name="Publisher" Type="string" Value="ChiralScroll" />
+                <RegistryValue Name="InstallLocation" Type="string" Value="[INSTALLDIR]" />
+                <RegistryValue Name="UninstallString" Type="string" Value="msiexec /x [ProductCode]" />
+                <RegistryValue Name="NoModify" Type="integer" Value="1" />
+                <RegistryValue Name="NoRepair" Type="integer" Value="1" />
+            </RegistryKey>
+            <RegistryValue
+                Root="HKCU"
+                Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\ChiralScroll"
+                Name="Installed"
+                Type="integer"
+                Value="1"
+                KeyPath="yes" />
+        </Component>
+
+    </Package>
+</Wix>

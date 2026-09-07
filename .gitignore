@@ -6,3 +6,4 @@ tmp/
 *.aps
 chiralscroll.log
 settings.ini
+dist/
