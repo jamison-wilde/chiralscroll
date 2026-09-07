@@ -1,5 +1,6 @@
 #include "SettingsDialog.h"
 
+#include <algorithm>
 #include <format>
 #include <optional>
 #include <string>
@@ -92,6 +93,9 @@ public:
 		{
 			deviceKeys_.push_back(pair.first);
 		}
+		// The map's iteration order is unspecified; sort so duplicate-name
+		// suffixes ("(2)", "(3)") stay attached to the same device across runs.
+		std::sort(deviceKeys_.begin(), deviceKeys_.end());
 		const std::vector<std::wstring> labels = MakeDeviceLabels(deviceKeys_);
 		for(size_t i = 0; i < deviceKeys_.size(); ++i)
 		{
@@ -150,20 +154,20 @@ private:
 	{
 		HWND combo = GetDlgItem(dlg_, IDC_DEVICE_SELECTOR);
 		const int selection = ComboBox_GetCurSel(combo);
-		if(selection < 0)
+		const LRESULT keyIndex =
+			selection < 0 ? -1 : ComboBox_GetItemData(combo, selection);
+		// No device selected, or an item whose data does not resolve to a key.
+		// Both must clear current_: leaving it bound to the previously loaded
+		// device would let an edit silently write to the wrong device.
+		if(keyIndex < 0 || static_cast<size_t>(keyIndex) >= deviceKeys_.size())
 		{
-			// No touch devices.
 			current_ = nullptr;
 			CheckDlgButton(dlg_, IDC_ENABLE_DEVICE, BST_UNCHECKED);
 			EnableWindow(GetDlgItem(dlg_, IDC_ENABLE_DEVICE), FALSE);
 			EnableControls(false);
 			return;
 		}
-		const LRESULT keyIndex = ComboBox_GetItemData(combo, selection);
-		if(keyIndex < 0 || static_cast<size_t>(keyIndex) >= deviceKeys_.size())
-		{
-			return;
-		}
+		EnableWindow(GetDlgItem(dlg_, IDC_ENABLE_DEVICE), TRUE);
 		current_ = &settings_.GetDeviceSettings(deviceKeys_[static_cast<size_t>(keyIndex)]);
 
 		CheckDlgButton(dlg_, IDC_ENABLE_DEVICE,

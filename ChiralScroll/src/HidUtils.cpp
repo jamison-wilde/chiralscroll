@@ -6,7 +6,7 @@
 #include <unordered_map>
 
 // Must come after Windows.h (via HidUtils.h).
-#include <SetupAPI.h>
+#include <setupapi.h>
 
 #include "Log.h"
 #include "StringUtils.h"
@@ -680,9 +680,7 @@ std::string GetFriendlyDeviceName(std::string_view devicePath)
 	{
 		return std::string(devicePath);
 	}
-	name = name.substr(first, last - first + 1);
-
-	return name.empty() ? std::string(devicePath) : WstringToString(name);
+	return WstringToString(name.substr(first, last - first + 1));
 }
 
 }  // namespace chiralscroll
