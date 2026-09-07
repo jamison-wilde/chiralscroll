@@ -102,9 +102,11 @@
                   Source="$(BinDir)\ChiralScroll.exe"
                   KeyPath="yes" />
             <!-- settings.ini and chiralscroll.log are created beside the exe
-                 at runtime; remove them on uninstall so no folder is left. -->
-            <RemoveFile Id="RemoveSettingsIni" Name="settings.ini" On="uninstall" />
-            <RemoveFile Id="RemoveLog" Name="chiralscroll.log" On="uninstall" />
+                 at runtime and are deliberately NOT removed. A major upgrade
+                 uninstalls the old product after laying down the new files,
+                 so RemoveFile rows here would run during every upgrade and
+                 delete the user's tuned settings. Leaving them also preserves
+                 configuration across an uninstall/reinstall. -->
         </Component>
 
         <!-- Autostart at login. WorkingDirectory is not settable from a Run
