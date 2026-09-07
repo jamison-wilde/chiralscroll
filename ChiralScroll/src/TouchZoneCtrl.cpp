@@ -200,13 +200,12 @@ void TouchZoneCtrl::Paint(HDC dc, const RECT& client) const
 		const int hEdge = static_cast<int>(height*(1.0f - hZone_));
 		const int oldBkMode = SetBkMode(dc, TRANSPARENT);
 
+		const int lineWidth = Scaled(kZoneLineWidth);
 		if(hZone_ > 0)
 		{
-			HBRUSH hatch = CreateHatchBrush(HS_BDIAGONAL, RGB(200, 0, 0));
-			RECT zone{0, hEdge, vEdge, height};
-			FillRect(dc, &zone, hatch);
-			DeleteObject(hatch);
-			HPEN pen = CreatePen(PS_SOLID, 1, RGB(200, 0, 0));
+			const RECT zone{0, hEdge, vEdge, height};
+			FillHatched(dc, zone, RGB(200, 0, 0), false);
+			HPEN pen = CreatePen(PS_SOLID, lineWidth, RGB(200, 0, 0));
 			HGDIOBJ oldPen = SelectObject(dc, pen);
 			MoveToEx(dc, 0, hEdge, nullptr);
 			LineTo(dc, vEdge, hEdge);
@@ -215,11 +214,9 @@ void TouchZoneCtrl::Paint(HDC dc, const RECT& client) const
 		}
 		if(vZone_ > 0)
 		{
-			HBRUSH hatch = CreateHatchBrush(HS_FDIAGONAL, RGB(0, 160, 0));
-			RECT zone{vEdge, 0, width, height};
-			FillRect(dc, &zone, hatch);
-			DeleteObject(hatch);
-			HPEN pen = CreatePen(PS_SOLID, 1, RGB(0, 160, 0));
+			const RECT zone{vEdge, 0, width, height};
+			FillHatched(dc, zone, RGB(0, 160, 0), true);
+			HPEN pen = CreatePen(PS_SOLID, lineWidth, RGB(0, 160, 0));
 			HGDIOBJ oldPen = SelectObject(dc, pen);
 			MoveToEx(dc, vEdge, 0, nullptr);
 			LineTo(dc, vEdge, height);
@@ -241,6 +238,39 @@ void TouchZoneCtrl::Paint(HDC dc, const RECT& client) const
 	DeleteObject(padBrush);
 	SelectClipRgn(dc, nullptr);
 	DeleteObject(clipRgn);
+}
+
+void TouchZoneCtrl::FillHatched(HDC dc, const RECT& rect, COLORREF color, bool forward) const
+{
+	// SaveDC/RestoreDC keeps the caller's round-rect clip region intact.
+	const int saved = SaveDC(dc);
+	IntersectClipRect(dc, rect.left, rect.top, rect.right, rect.bottom);
+
+	HPEN pen = CreatePen(PS_SOLID, Scaled(kHatchLineWidth), color);
+	HGDIOBJ oldPen = SelectObject(dc, pen);
+
+	const int spacing = Scaled(kHatchSpacing);
+	const int width = rect.right - rect.left;
+	const int height = rect.bottom - rect.top;
+	// Sweep the diagonal's x-intercept from -height so the leading corner is
+	// covered, through width so the trailing one is too.
+	for(int offset = -height; offset < width + height; offset += spacing)
+	{
+		if(forward)
+		{
+			MoveToEx(dc, rect.left + offset, rect.bottom, nullptr);
+			LineTo(dc, rect.left + offset + height, rect.top);
+		}
+		else
+		{
+			MoveToEx(dc, rect.left + offset, rect.top, nullptr);
+			LineTo(dc, rect.left + offset + height, rect.bottom);
+		}
+	}
+
+	SelectObject(dc, oldPen);
+	DeleteObject(pen);
+	RestoreDC(dc, saved);
 }
 
 POINT TouchZoneCtrl::VGrabberPos(const RECT& client) const

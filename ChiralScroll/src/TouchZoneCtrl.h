@@ -37,6 +37,11 @@ private:
 	// client area (corners included) is covered in one BitBlt, avoiding flicker.
 	void OnPaint() const;
 	void Paint(HDC dc, const RECT& client) const;
+
+	// Fills rect with 45-degree hatching (forward = '/', else '\'). GDI's
+	// stock hatch brushes are a fixed device-pixel pattern, so they thin out
+	// to a faint tint as DPI rises; these lines scale instead.
+	void FillHatched(HDC dc, const RECT& rect, COLORREF color, bool forward) const;
 	POINT VGrabberPos(const RECT& client) const;
 	POINT HGrabberPos(const RECT& client) const;
 	void NotifyParent() const;
@@ -52,6 +57,10 @@ private:
 	static constexpr int kGrabberSize = 7;
 	static constexpr int kHitSlop = 5;
 	static constexpr int kCornerSize = 13;
+	// Zone boundary line and hatch metrics, in design (96 DPI) pixels.
+	static constexpr int kZoneLineWidth = 2;
+	static constexpr int kHatchLineWidth = 1;
+	static constexpr int kHatchSpacing = 7;
 
 	HWND hwnd_;
 	float vZone_ = 0.0f;
