@@ -55,6 +55,8 @@ void WinScroller::Flush()
 		// Flush runs from destructors; never throw. Injection can fail
 		// transiently (e.g. secure desktop), so log and drop the batch.
 		LOG_ERROR("SendInput failed: {}", GetErrorMessage(GetLastError()));
+		// pending_ is decremented below on this path too, deliberately: a
+		// dropped batch must not be replayed later as stale scrolling.
 	}
 	else
 	{
