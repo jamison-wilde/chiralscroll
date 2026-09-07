@@ -178,12 +178,12 @@ void ScrollSession::Scroll(Vector<float> newDir, Vector<float> newPos)
 {
 	const double distance = newDir.Norm();
 	const LONG contactAreaHeight = contactInfo_.logicalArea.bottom - contactInfo_.logicalArea.top;
-	scroller_.Scroll(static_cast<int>(
+	scroller_.Scroll(
 		scrollDirection_
 		* distance
 		* sens_
 		* settings_.sensScalingFactor
-		* contactAreaHeight));
+		* contactAreaHeight);
 	position_ = newPos;
 	direction_ = newDir/static_cast<float>(distance);
 }

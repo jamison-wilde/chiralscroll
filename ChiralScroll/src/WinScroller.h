@@ -17,7 +17,7 @@ public:
 	virtual ~WinScroller() { StopScrolling(); }
 
 	void StartScrolling() override;
-	void Scroll(int amt) override;
+	void Scroll(double amt) override;
 	void StopScrolling() override;
 
 private:
@@ -25,7 +25,10 @@ private:
 
 	const Direction dir_;
 	const std::chrono::steady_clock::duration interval_;
-	int pending_ = 0;
+	// Accumulated wheel units awaiting a flush. Kept fractional: only whole
+	// units are sent, and the remainder carries to the next flush so slow
+	// movement is not rounded away.
+	double pending_ = 0.0;
 	std::chrono::steady_clock::time_point lastFlush_{};
 };
 

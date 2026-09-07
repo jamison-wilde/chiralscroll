@@ -14,12 +14,12 @@ void WinScroller::StartScrolling()
 	GetCursorPos(&p);
 	RECT r = {p.x, p.y, p.x + 1, p.y + 1};
 	ClipCursor(&r);
-	pending_ = 0;
+	pending_ = 0.0;
 	lastFlush_ = std::chrono::steady_clock::now() - interval_;
 	LOG_INFO("Start scrolling session.");
 }
 
-void WinScroller::Scroll(int amt)
+void WinScroller::Scroll(double amt)
 {
 	pending_ += amt;
 	const auto now = std::chrono::steady_clock::now();
@@ -32,7 +32,10 @@ void WinScroller::Scroll(int amt)
 
 void WinScroller::Flush()
 {
-	if(pending_ == 0)
+	// Send whole units only; the sub-unit remainder stays in pending_ for the
+	// next flush rather than being rounded away.
+	const int amount = static_cast<int>(pending_);
+	if(amount == 0)
 	{
 		return;
 	}
@@ -42,7 +45,7 @@ void WinScroller::Flush()
 	input.type = INPUT_MOUSE;
 	input.mi.dx = 0;
 	input.mi.dy = 0;
-	input.mi.mouseData = pending_;
+	input.mi.mouseData = static_cast<DWORD>(amount);
 	input.mi.dwFlags = dir_ == Direction::kVertical ? MOUSEEVENTF_WHEEL : MOUSEEVENTF_HWHEEL;
 	input.mi.time = 0;  //Windows will do the timestamp
 	input.mi.dwExtraInfo = GetMessageExtraInfo();
@@ -56,9 +59,9 @@ void WinScroller::Flush()
 	else
 	{
 		LOG_DEBUG("Scroll by {} {}.",
-			pending_, dir_ == Direction::kVertical ? "vertical" : "horizontal");
+			amount, dir_ == Direction::kVertical ? "vertical" : "horizontal");
 	}
-	pending_ = 0;
+	pending_ -= amount;
 }
 
 void WinScroller::StopScrolling()
