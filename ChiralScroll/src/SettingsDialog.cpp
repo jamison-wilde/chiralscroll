@@ -3,9 +3,12 @@
 #include <format>
 #include <optional>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <windowsx.h>
 
+#include "HidUtils.h"
 #include "Log.h"
 #include "resource.h"
 #include "StringUtils.h"
@@ -50,6 +53,27 @@ std::optional<int> ParseInt(const std::wstring& str)
 	}
 }
 
+// Builds display labels for the device paths. Friendly names are not unique
+// (two identical touchpads report the same name), so repeats get a numeric
+// suffix — the raw path remains the settings key regardless.
+std::vector<std::wstring> MakeDeviceLabels(const std::vector<std::string>& keys)
+{
+	std::vector<std::wstring> labels;
+	labels.reserve(keys.size());
+	std::unordered_map<std::wstring, int> seen;
+	for(const std::string& key : keys)
+	{
+		std::wstring label = StringToWstring(GetFriendlyDeviceName(key));
+		const int count = ++seen[label];
+		if(count > 1)
+		{
+			label += std::format(L" ({})", count);
+		}
+		labels.push_back(std::move(label));
+	}
+	return labels;
+}
+
 class DialogState
 {
 public:
@@ -61,9 +85,21 @@ public:
 	{
 		dlg_ = dlg;
 		HWND combo = GetDlgItem(dlg_, IDC_DEVICE_SELECTOR);
+
+		// The combo shows friendly names, but settings stay keyed by the raw
+		// device path: each item carries an index into deviceKeys_.
 		for(const auto& pair : settings_.GetDeviceSettings())
 		{
-			ComboBox_AddString(combo, StringToWstring(pair.first).c_str());
+			deviceKeys_.push_back(pair.first);
+		}
+		const std::vector<std::wstring> labels = MakeDeviceLabels(deviceKeys_);
+		for(size_t i = 0; i < deviceKeys_.size(); ++i)
+		{
+			const int item = ComboBox_AddString(combo, labels[i].c_str());
+			if(item >= 0)
+			{
+				ComboBox_SetItemData(combo, item, static_cast<LPARAM>(i));
+			}
 		}
 		ComboBox_SetCurSel(combo, 0);
 		LoadDevice();
@@ -123,10 +159,12 @@ private:
 			EnableControls(false);
 			return;
 		}
-		const int length = ComboBox_GetLBTextLen(combo, selection);
-		std::wstring name(length, L'\0');
-		ComboBox_GetLBText(combo, selection, name.data());
-		current_ = &settings_.GetDeviceSettings(WstringToString(name));
+		const LRESULT keyIndex = ComboBox_GetItemData(combo, selection);
+		if(keyIndex < 0 || static_cast<size_t>(keyIndex) >= deviceKeys_.size())
+		{
+			return;
+		}
+		current_ = &settings_.GetDeviceSettings(deviceKeys_[static_cast<size_t>(keyIndex)]);
 
 		CheckDlgButton(dlg_, IDC_ENABLE_DEVICE,
 			current_->enabled ? BST_CHECKED : BST_UNCHECKED);
@@ -174,6 +212,8 @@ private:
 	Settings settings_;
 	Settings::DeviceSettings* current_ = nullptr;
 	HWND dlg_ = nullptr;
+	// Raw device paths (the settings keys), indexed by combo item data.
+	std::vector<std::string> deviceKeys_;
 };
 
 INT_PTR CALLBACK DlgProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)

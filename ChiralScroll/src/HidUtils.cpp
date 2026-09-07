@@ -2,7 +2,11 @@
 
 #include <format>
 #include <functional>
+#include <iterator>
 #include <unordered_map>
+
+// Must come after Windows.h (via HidUtils.h).
+#include <SetupAPI.h>
 
 #include "Log.h"
 #include "StringUtils.h"
@@ -11,6 +15,100 @@ namespace chiralscroll
 {
 
 namespace {
+
+// Queries the device's own USB/HID product string. Many touchpads leave this
+// empty, hence the SetupAPI fallback below.
+std::wstring GetHidProductString(const std::wstring& path)
+{
+	// Zero access rights: the system holds touchpads open exclusively, but
+	// string queries succeed on a no-access handle.
+	const HANDLE device = CreateFileW(path.c_str(), 0,
+		FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+	if(device == INVALID_HANDLE_VALUE)
+	{
+		return {};
+	}
+	wchar_t buffer[256]{};
+	const bool ok = HidD_GetProductString(device, buffer, sizeof(buffer)) != FALSE;
+	CloseHandle(device);
+	if(!ok)
+	{
+		return {};
+	}
+	buffer[std::size(buffer) - 1] = L'\0';
+	return buffer;
+}
+
+// Reads a device's FriendlyName (or DeviceDesc) out of the device registry.
+std::wstring GetDeviceRegistryName(HDEVINFO devInfo, SP_DEVINFO_DATA& devData)
+{
+	for(const DWORD property : {SPDRP_FRIENDLYNAME, SPDRP_DEVICEDESC})
+	{
+		DWORD required = 0;
+		SetupDiGetDeviceRegistryPropertyW(devInfo, &devData, property, nullptr, nullptr, 0, &required);
+		if(required == 0)
+		{
+			continue;
+		}
+		std::wstring value(required/sizeof(wchar_t) + 1, L'\0');
+		if(SetupDiGetDeviceRegistryPropertyW(devInfo, &devData, property, nullptr,
+				reinterpret_cast<PBYTE>(value.data()), required, nullptr))
+		{
+			value.resize(wcslen(value.c_str()));
+			if(!value.empty())
+			{
+				return value;
+			}
+		}
+	}
+	return {};
+}
+
+// Walks the present HID interfaces for the one whose path matches, then reads
+// its friendly name.
+std::wstring GetSetupApiName(const std::wstring& path)
+{
+	GUID hidGuid;
+	HidD_GetHidGuid(&hidGuid);
+	const HDEVINFO devInfo = SetupDiGetClassDevsW(
+		&hidGuid, nullptr, nullptr, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+	if(devInfo == INVALID_HANDLE_VALUE)
+	{
+		return {};
+	}
+
+	std::wstring name;
+	SP_DEVICE_INTERFACE_DATA interfaceData{};
+	interfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
+	for(DWORD i = 0;
+	    name.empty() && SetupDiEnumDeviceInterfaces(devInfo, nullptr, &hidGuid, i, &interfaceData);
+	    ++i)
+	{
+		DWORD detailSize = 0;
+		SetupDiGetDeviceInterfaceDetailW(devInfo, &interfaceData, nullptr, 0, &detailSize, nullptr);
+		if(detailSize == 0)
+		{
+			continue;
+		}
+		std::vector<uint8_t> buffer(detailSize);
+		auto* detail = reinterpret_cast<PSP_DEVICE_INTERFACE_DETAIL_DATA_W>(buffer.data());
+		detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
+		SP_DEVINFO_DATA devData{};
+		devData.cbSize = sizeof(SP_DEVINFO_DATA);
+		if(!SetupDiGetDeviceInterfaceDetailW(devInfo, &interfaceData, detail, detailSize, nullptr, &devData))
+		{
+			continue;
+		}
+		// Raw input and SetupAPI can differ in case for the same path.
+		if(_wcsicmp(detail->DevicePath, path.c_str()) == 0)
+		{
+			name = GetDeviceRegistryName(devInfo, devData);
+		}
+	}
+
+	SetupDiDestroyDeviceInfoList(devInfo);
+	return name;
+}
 
 std::vector<RAWINPUTDEVICELIST> GetRidList()
 {
@@ -561,6 +659,30 @@ std::unordered_map<HANDLE, TouchDevice> GetTouchDevices(bool panicOnUnexpectedIn
 		}
 	}
 	return touchDevices;
+}
+
+std::string GetFriendlyDeviceName(std::string_view devicePath)
+{
+	const std::wstring path = StringToWstring(devicePath);
+	// SetupAPI first: it yields the name Device Manager shows, so users can
+	// cross-reference. Some HID drivers report a useless product string
+	// ("HID Miniport Device"), so that is only a fallback.
+	std::wstring name = GetSetupApiName(path);
+	if(name.empty())
+	{
+		name = GetHidProductString(path);
+	}
+
+	// Some devices pad their strings with whitespace.
+	const size_t first = name.find_first_not_of(L" \t");
+	const size_t last = name.find_last_not_of(L" \t");
+	if(first == std::wstring::npos)
+	{
+		return std::string(devicePath);
+	}
+	name = name.substr(first, last - first + 1);
+
+	return name.empty() ? std::string(devicePath) : WstringToString(name);
 }
 
 }  // namespace chiralscroll

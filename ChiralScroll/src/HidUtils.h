@@ -192,4 +192,13 @@ private:
 
 std::unordered_map<HANDLE, TouchDevice> GetTouchDevices(bool panicOnUnexpectedInput);
 
+// Returns a human-readable name for a raw-input device path, e.g.
+// "Synaptics HID-Compliant Touch pad Device" instead of
+// "\\?\HID#DRIVERENUM&Col02#6&386eb358&0&0001#{4d1e55b2-...}".
+// Falls back to the path itself when no name can be resolved.
+//
+// DISPLAY ONLY: settings.ini sections are keyed by the raw path, so this must
+// never be used as a settings key.
+std::string GetFriendlyDeviceName(std::string_view devicePath);
+
 }  // namespace chiralscroll
