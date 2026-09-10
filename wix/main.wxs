@@ -24,7 +24,12 @@
 
         <SummaryInformation Description="ChiralScroll — chiral edge scrolling for Windows Precision touchpads" />
 
+        <!-- AllowSameVersionUpgrades is essential: WiX generates a fresh
+             ProductCode on every build, so without it a rebuild-and-install
+             at the same version is not detected as a related product and
+             installs side by side, adding an Apps entry each time. -->
         <MajorUpgrade
+            AllowSameVersionUpgrades="yes"
             Schedule="afterInstallInitialize"
             DowngradeErrorMessage="A newer version of [ProductName] is already installed. Setup will now exit." />
 
@@ -45,9 +50,15 @@
         <Feature Id="Main" Title="ChiralScroll" Level="1">
             <ComponentRef Id="ChiralScrollExe" />
             <ComponentRef Id="RunKey" />
-            <ComponentRef Id="UninstallEntry" />
             <ComponentRef Id="StartMenuShortcut" />
         </Feature>
+
+        <!-- Windows Installer writes its own Apps entry keyed by ProductCode,
+             sourced from Package/@Name, @Version and @Manufacturer. These fill
+             in the rest of it. ARPNOMODIFY is NOT set here: WixUI_Minimal
+             already declares it, and declaring it twice fails the build. -->
+        <Property Id="ARPNOREPAIR" Value="1" />
+        <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLDIR]" After="CostFinalize" />
 
         <ui:WixUI Id="WixUI_Minimal" />
         <WixVariable Id="WixUILicenseRtf" Value="wix\license.rtf" />
@@ -122,25 +133,14 @@
                 Type="string"
                 Value="&quot;[INSTALLDIR]ChiralScroll.exe&quot;"
                 KeyPath="yes" />
-        </Component>
-
-        <Component Id="UninstallEntry" Directory="INSTALLDIR" Guid="*" Bitness="always64">
-            <RegistryKey Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\ChiralScroll">
-                <RegistryValue Name="DisplayName" Type="string" Value="ChiralScroll" />
-                <RegistryValue Name="DisplayVersion" Type="string" Value="$(Version)" />
-                <RegistryValue Name="Publisher" Type="string" Value="ChiralScroll" />
-                <RegistryValue Name="InstallLocation" Type="string" Value="[INSTALLDIR]" />
-                <RegistryValue Name="UninstallString" Type="string" Value="msiexec /x [ProductCode]" />
-                <RegistryValue Name="NoModify" Type="integer" Value="1" />
-                <RegistryValue Name="NoRepair" Type="integer" Value="1" />
-            </RegistryKey>
-            <RegistryValue
+            <!-- Sweep the orphan left by earlier builds, which hand-wrote an
+                 Apps entry under a fixed key name (not keyed by ProductCode).
+                 It duplicated Windows Installer's own entry and outlived the
+                 product that wrote it. -->
+            <RemoveRegistryKey
                 Root="HKCU"
                 Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\ChiralScroll"
-                Name="Installed"
-                Type="integer"
-                Value="1"
-                KeyPath="yes" />
+                Action="removeOnInstall" />
         </Component>
 
     </Package>
